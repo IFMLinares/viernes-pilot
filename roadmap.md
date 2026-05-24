@@ -12,7 +12,7 @@
 - ✅ Tests de conectividad pasando
 
 ---
-
+|
 ## Fases
 
 ### Fase 1 — Fundación *(hoy)*

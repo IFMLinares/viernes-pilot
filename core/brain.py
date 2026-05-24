@@ -4,11 +4,14 @@ import requests
 OLLAMA_URL = "http://localhost:11434"
 
 
-def chat(model: str, messages: list[dict]) -> str:
+def chat(model: str, messages: list[dict], format: str = None) -> str:
     """Envía un mensaje al modelo y devuelve la respuesta."""
+    payload = {"model": model, "messages": messages, "stream": False}
+    if format:
+        payload["format"] = format
     response = requests.post(
         f"{OLLAMA_URL}/api/chat",
-        json={"model": model, "messages": messages, "stream": False},
+        json=payload,
     )
     response.raise_for_status()
     return response.json()["message"]["content"]
