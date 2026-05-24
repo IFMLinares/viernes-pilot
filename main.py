@@ -7,11 +7,12 @@ from core.memory import search, save, learn_from_interaction, search_expanded
 from config import OLLAMA_MODEL, SYSTEM_PROMPT
 
 # Mapeo y esquemas de herramientas para Tool Calling
-from tools.sistema import abrir_programa, mostrar_notificacion
+from tools.sistema import abrir_programa, mostrar_notificacion, abrir_terminal
 
 FUNCIONES_MAP = {
     "abrir_programa": abrir_programa,
-    "mostrar_notificacion": mostrar_notificacion
+    "mostrar_notificacion": mostrar_notificacion,
+    "abrir_terminal": abrir_terminal
 }
 
 TOOLS = [
@@ -29,9 +30,37 @@ TOOLS = [
                     "programa": {
                         "type": "string",
                         "description": "El nombre o alias del programa a abrir."
+                    },
+                    "ruta": {
+                        "type": "string",
+                        "description": "Opcional. La ruta absoluta de la carpeta o archivo a abrir con el programa (ej: abrir un proyecto en el editor)."
                     }
                 },
                 "required": ["programa"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "abrir_terminal",
+            "description": (
+                "Abre una nueva pestaña o ventana de terminal en un directorio específico, "
+                "pudiendo ejecutar opcionalmente un comando de forma interactiva."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "carpeta": {
+                        "type": "string",
+                        "description": "La ruta absoluta de la carpeta donde se iniciará la terminal."
+                    },
+                    "comando": {
+                        "type": "string",
+                        "description": "Opcional. El comando a ejecutar automáticamente en la terminal (ej: 'python manage.py runserver')."
+                    }
+                },
+                "required": ["carpeta"]
             }
         }
     },

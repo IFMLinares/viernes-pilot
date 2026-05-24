@@ -56,6 +56,15 @@ class TestSistemaTools(unittest.TestCase):
         self.assertIn("calculadora de windows", nombres)
         self.assertIn("calculadora grafica", nombres)
 
+    def test_to_windows_path(self):
+        """Valida que la ruta de Windows se traduzca correctamente si estamos en WSL."""
+        from tools.sistema import is_wsl, to_windows_path
+        if not is_wsl():
+            self.assertEqual(to_windows_path("/home/test"), "/home/test")
+        else:
+            win_path = to_windows_path("/home/ifmlinares/projects/viernes")
+            self.assertTrue(win_path.startswith("\\\\wsl") or "Ubuntu" in win_path or "localhost" in win_path)
+
 
 if __name__ == "__main__":
     unittest.main()

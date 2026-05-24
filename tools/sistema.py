@@ -32,6 +32,42 @@ def is_wsl() -> bool:
     return False
 
 
+def to_windows_path(path: str) -> str:
+    """Convierte una ruta de WSL a ruta de Windows si es necesario."""
+    if is_wsl() and path:
+        try:
+            res = subprocess.run(["wslpath", "-w", path], capture_output=True, text=True, check=True)
+            return res.stdout.strip()
+        except Exception:
+            pass
+    return path
+
+
+def obtener_windows_appdata(roaming: bool = True) -> str:
+    """Retorna la ruta de WSL al directorio AppData de Windows (Roaming o Local)."""
+    var_name = "$env:APPDATA" if roaming else "$env:LOCALAPPDATA"
+    fallback = "Roaming" if roaming else "Local"
+    try:
+        res = subprocess.run(
+            ["powershell.exe", "-Command", f"Write-Output {var_name}"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        win_path = res.stdout.strip()
+        if win_path:
+            res_wsl = subprocess.run(
+                ["wslpath", "-u", win_path],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            return res_wsl.stdout.strip()
+    except Exception:
+        pass
+    return f"/mnt/c/Users/ifmlinares/AppData/{fallback}"
+
+
 def normalizar_texto(texto: str) -> str:
     """Normaliza el texto quitando acentos, caracteres especiales y convirtiendo a minúsculas."""
     texto_nfkd = unicodedata.normalize('NFKD', texto)
@@ -165,9 +201,10 @@ def buscar_coincidencias(query: str, candidatos: dict[str, tuple[str, str]]) -> 
     return resultados
 
 
-def abrir_programa(programa: str) -> str:
-    """Abre un programa en el sistema resolviéndolo dinámicamente o por alias."""
+def abrir_programa(programa: str, ruta: str = None) -> str:
+    """Abre un programa en el sistema resolviéndolo dinámicamente o por alias, opcionalmente abriendo una ruta."""
     prog_lower = programa.lower().strip()
+    ruta_abs = os.path.abspath(os.path.expanduser(ruta)) if ruta else None
     
     # 1. Determinar candidatos según el mapeo de alias
     if prog_lower in APP_MAP:
@@ -190,13 +227,17 @@ def abrir_programa(programa: str) -> str:
                 
         if resolved_candidate:
             try:
+                cmd = [resolved_candidate]
+                if ruta_abs:
+                    cmd.append(to_windows_path(ruta_abs))
                 subprocess.Popen(
-                    [resolved_candidate],
+                    cmd,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     start_new_session=True
                 )
-                return f"Lanzando el programa alias '{programa}' ('{resolved_candidate}') en segundo plano con éxito."
+                info_ruta = f" apuntando a '{ruta_abs}'" if ruta_abs else ""
+                return f"Lanzando el programa alias '{programa}' ('{resolved_candidate}'){info_ruta} en segundo plano con éxito."
             except Exception as e:
                 return f"Error al intentar ejecutar el alias '{resolved_candidate}': {e}"
 
@@ -204,13 +245,17 @@ def abrir_programa(programa: str) -> str:
     path_check = shutil.which(programa)
     if path_check:
         try:
+            cmd = [path_check]
+            if ruta_abs:
+                cmd.append(to_windows_path(ruta_abs))
             subprocess.Popen(
-                [path_check],
+                cmd,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True
             )
-            return f"Lanzando el ejecutable directo '{programa}' en segundo plano con éxito."
+            info_ruta = f" apuntando a '{ruta_abs}'" if ruta_abs else ""
+            return f"Lanzando el ejecutable directo '{programa}'{info_ruta} en segundo plano con éxito."
         except Exception as e:
             return f"Error al intentar ejecutar el ejecutable '{programa}': {e}"
 
@@ -234,26 +279,30 @@ def abrir_programa(programa: str) -> str:
         try:
             if is_wsl():
                 # En WSL lanzamos UWP o Win32 por AppID usando explorer.exe shell:AppsFolder\<AppID>
+                cmd = ["explorer.exe", f"shell:AppsFolder\\{best_ref}"]
                 subprocess.Popen(
-                    ["explorer.exe", f"shell:AppsFolder\\{best_ref}"],
+                    cmd,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     start_new_session=True
                 )
             else:
                 # En Linux nativo lanzamos usando gtk-launch con el archivo desktop
+                cmd = ["gtk-launch", best_ref]
+                if ruta_abs:
+                    cmd.append(ruta_abs)
                 subprocess.Popen(
-                    ["gtk-launch", best_ref],
+                    cmd,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     start_new_session=True
                 )
-            return f"Lanzando '{best_orig}' en segundo plano con éxito."
+            info_ruta = f" apuntando a '{ruta_abs}'" if (ruta_abs and not is_wsl()) else ""
+            return f"Lanzando '{best_orig}'{info_ruta} en segundo plano con éxito."
         except Exception as e:
             return f"Error al lanzar '{best_orig}': {e}"
 
     # Caso 2: Coincidencia ambigua o de confianza media
-    # Filtramos candidatos con score >= 0.55 y armamos una lista limpia de nombres amigables
     candidatos_validos = []
     for name_norm, score in coincidencias:
         if score >= 0.55:
@@ -261,7 +310,6 @@ def abrir_programa(programa: str) -> str:
             if orig_name not in candidatos_validos:
                 candidatos_validos.append(orig_name)
     
-    # Si tenemos múltiples opciones, informamos al LLM para que el usuario aclare
     if len(candidatos_validos) > 1:
         lista_opciones = ", ".join([f"'{c}'" for c in candidatos_validos[:3]])
         return (
@@ -269,11 +317,199 @@ def abrir_programa(programa: str) -> str:
             f"Por favor, preguntale al usuario cuál de ellas prefiere abrir."
         )
 
-    # Si hay un único candidato pero con score bajo
     return (
         f"AMBIGUO: ¿Quisiste decir '{best_orig}'? "
         f"Confirmá con el usuario antes de abrir esta aplicación."
     )
+
+
+def abrir_terminal(carpeta: str, comando: str = None) -> str:
+    """Abre una nueva pestaña o ventana de terminal en el directorio especificado, ejecutando opcionalmente un comando."""
+    carpeta_abs = os.path.abspath(os.path.expanduser(carpeta))
+    if not os.path.exists(carpeta_abs):
+        return f"Error: La ruta '{carpeta_abs}' no existe en el sistema."
+
+    folder_name = os.path.basename(carpeta_abs) or "run"
+    folder_name_clean = re.sub(r'[^a-zA-Z0-9_]', '_', folder_name)
+
+    if is_wsl():
+        # 1. Resolver rutas de Windows
+        win_carpeta = to_windows_path(carpeta_abs)
+        roaming = obtener_windows_appdata(roaming=True)
+        local = obtener_windows_appdata(roaming=False)
+        
+        # Warp Configurations directory on Windows
+        warp_configs_dir = os.path.join(roaming, "warp", "Warp", "data", "tab_configs")
+        
+        if os.path.exists(warp_configs_dir):
+            # Usar Warp Terminal
+            if comando:
+                # Escribir un archivo TOML de Tab Config para Warp
+                config_filename = f"viernes_{folder_name_clean}.toml"
+                config_path = os.path.join(warp_configs_dir, config_filename)
+                
+                # Escapar rutas y comandos para TOML
+                dir_val = win_carpeta.replace("\\", "\\\\").replace('"', '\\"')
+                cmd_val = comando.replace("\\", "\\\\").replace('"', '\\"')
+                
+                toml_content = f"""# Configuración autogenerada por Viernes
+name = "viernes_{folder_name_clean}"
+
+[[panes]]
+id = "main"
+type = "terminal"
+directory = "{dir_val}"
+commands = ["{cmd_val}"]
+"""
+                try:
+                    with open(config_path, "w", encoding="utf-8") as f:
+                        f.write(toml_content)
+                    
+                    # Ejecutar vía protocolo URI de Warp en Windows
+                    subprocess.Popen(
+                        ["powershell.exe", "-Command", f"Start-Process 'warp://tab_config/viernes_{folder_name_clean}'"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    return f"Nueva pestaña de Warp abierta ejecutando '{comando}' en '{carpeta_abs}' (vía Tab Config)."
+                except Exception as e:
+                    return f"Error al generar Tab Config de Warp: {e}. Reintentando con fallback..."
+            else:
+                # Lanzar pestaña interactiva simple en Warp
+                try:
+                    subprocess.Popen(
+                        ["powershell.exe", "-Command", f"Start-Process 'warp://action/new_tab?path={win_carpeta}'"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    return f"Nueva pestaña de Warp abierta parada en '{carpeta_abs}'."
+                except Exception as e:
+                    return f"Error al lanzar pestaña en Warp: {e}. Reintentando con fallback..."
+
+        # 2. Fallback a Windows Terminal (wt.exe)
+        wt_path = os.path.join(local, "Microsoft", "WindowsApps", "wt.exe")
+        distro = os.environ.get("WSL_DISTRO_NAME", "Ubuntu")
+        
+        if os.path.exists(wt_path):
+            try:
+                if comando:
+                    args = [
+                        wt_path, "-d", win_carpeta, "wsl.exe", "-d", distro,
+                        "-e", "bash", "-c", f"cd {carpeta_abs} && {comando}; exec bash"
+                    ]
+                else:
+                    args = [wt_path, "-d", win_carpeta, "wsl.exe", "-d", distro]
+                
+                subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+                return f"Nueva pestaña de Windows Terminal abierta en '{carpeta_abs}'."
+            except Exception:
+                pass
+
+        # 3. Fallback a Conhost (consola clásica de Windows)
+        try:
+            if comando:
+                args = [
+                    "conhost.exe", "wsl.exe", "-d", distro,
+                    "-e", "bash", "-c", f"cd {carpeta_abs} && {comando}; exec bash"
+                ]
+            else:
+                args = ["conhost.exe", "wsl.exe", "-d", distro]
+            
+            subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            return f"Nueva ventana de consola abierta en '{carpeta_abs}' (usando conhost.exe)."
+        except Exception as e:
+            return f"Error al intentar abrir la consola clásica de Windows: {e}"
+
+    else:
+        # Linux Nativo: Soporte para Warp y otros emuladores de terminal
+        warp_configs_dir = os.path.expanduser("~/.local/share/warp-terminal/tab_configs")
+        warp_in_path = shutil.which("warp-terminal")
+        
+        if warp_in_path or os.path.exists(warp_configs_dir):
+            os.makedirs(warp_configs_dir, exist_ok=True)
+            
+            if comando:
+                config_filename = f"viernes_{folder_name_clean}.toml"
+                config_path = os.path.join(warp_configs_dir, config_filename)
+                
+                dir_val = carpeta_abs.replace("\\", "\\\\").replace('"', '\\"')
+                cmd_val = comando.replace("\\", "\\\\").replace('"', '\\"')
+                
+                toml_content = f"""# Configuración autogenerada por Viernes
+name = "viernes_{folder_name_clean}"
+
+[[panes]]
+id = "main"
+type = "terminal"
+directory = "{dir_val}"
+commands = ["{cmd_val}"]
+"""
+                try:
+                    with open(config_path, "w", encoding="utf-8") as f:
+                        f.write(toml_content)
+                    
+                    subprocess.Popen(
+                        ["xdg-open", f"warp://tab_config/viernes_{folder_name_clean}"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    return f"Nueva pestaña de Warp abierta ejecutando '{comando}' en '{carpeta_abs}' (vía Tab Config)."
+                except Exception:
+                    pass
+            else:
+                try:
+                    subprocess.Popen(
+                        ["xdg-open", f"warp://action/new_tab?path={carpeta_abs}"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    return f"Nueva pestaña de Warp abierta parada en '{carpeta_abs}'."
+                except Exception:
+                    pass
+
+        # 2. Fallbacks de Linux
+        terminals = ["gnome-terminal", "konsole", "alacritty", "kitty", "xfce4-terminal", "xterm"]
+        for term in terminals:
+            path_check = shutil.which(term)
+            if path_check:
+                try:
+                    if term == "gnome-terminal":
+                        if comando:
+                            cmd = ["gnome-terminal", "--working-directory", carpeta_abs, "--", "bash", "-c", f"{comando}; exec bash"]
+                        else:
+                            cmd = ["gnome-terminal", "--working-directory", carpeta_abs]
+                    elif term == "konsole":
+                        if comando:
+                            cmd = ["konsole", "--workdir", carpeta_abs, "-e", "bash", "-c", f"{comando}; exec bash"]
+                        else:
+                            cmd = ["konsole", "--workdir", carpeta_abs]
+                    elif term == "alacritty":
+                        if comando:
+                            cmd = ["alacritty", "--working-directory", carpeta_abs, "-e", "bash", "-c", f"{comando}; exec bash"]
+                        else:
+                            cmd = ["alacritty", "--working-directory", carpeta_abs]
+                    elif term == "kitty":
+                        if comando:
+                            cmd = ["kitty", "--directory", carpeta_abs, "bash", "-c", f"{comando}; exec bash"]
+                        else:
+                            cmd = ["kitty", "--directory", carpeta_abs]
+                    elif term == "xfce4-terminal":
+                        if comando:
+                            cmd = ["xfce4-terminal", "--working-directory", carpeta_abs, "-e", f"bash -c '{comando}; exec bash'"]
+                        else:
+                            cmd = ["xfce4-terminal", "--working-directory", carpeta_abs]
+                    else: # xterm
+                        if comando:
+                            cmd = ["xterm", "-hold", "-e", f"cd '{carpeta_abs}' && {comando}"]
+                        else:
+                            cmd = ["xterm", "-hold", "-e", f"cd '{carpeta_abs}' && exec bash"]
+                            
+                    subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+                    return f"Nueva pestaña de '{term}' abierta en '{carpeta_abs}'."
+                except Exception:
+                    continue
+
+        return f"No se pudo encontrar un emulador de terminal compatible en tu sistema Linux."
 
 
 def mostrar_notificacion(titulo: str, mensaje: str) -> str:
