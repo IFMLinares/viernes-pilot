@@ -62,9 +62,11 @@ class TestSistemaTools(unittest.TestCase):
         if not is_wsl():
             self.assertEqual(to_windows_path("/home/test"), "/home/test")
         else:
-            win_path = to_windows_path("/home/ifmlinares/projects/viernes")
+            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            win_path = to_windows_path(current_dir)
             self.assertTrue(win_path.startswith("\\\\wsl") or "Ubuntu" in win_path or "localhost" in win_path)
 
 
 if __name__ == "__main__":
     unittest.main()
+

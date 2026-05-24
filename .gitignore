@@ -1,3 +1,32 @@
-.venv
+# Entornos virtuales
+.venv/
+venv/
+ENV/
+env/
 
+# Cache y archivos compilados de Python
+__pycache__/
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# IDEs y Editores de código
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Datos específicos del agente de IA/IDE
+.atl/
+
+# Variables de entorno y secretos
+.env
+*.env.*
+secrets.json
+
+# Logs
+*.log

@@ -65,7 +65,27 @@ def obtener_windows_appdata(roaming: bool = True) -> str:
             return res_wsl.stdout.strip()
     except Exception:
         pass
-    return f"/mnt/c/Users/ifmlinares/AppData/{fallback}"
+    
+    # Buscar dinámicamente en los directorios de usuarios de Windows
+    if os.path.exists("/mnt/c/Users"):
+        try:
+            for item in os.listdir("/mnt/c/Users"):
+                # Omitir directorios del sistema de Windows comunes
+                if item.lower() in ("default", "public", "all users", "default user"):
+                    continue
+                p = os.path.join("/mnt/c/Users", item, "AppData", fallback)
+                if os.path.isdir(p):
+                    return p
+        except Exception:
+            pass
+            
+    # Último recurso: usar el usuario de Linux (que a veces coincide con el de Windows)
+    try:
+        import getpass
+        user = getpass.getuser()
+        return f"/mnt/c/Users/{user}/AppData/{fallback}"
+    except Exception:
+        return f"/mnt/c/Users/Default/AppData/{fallback}"
 
 
 def normalizar_texto(texto: str) -> str:
