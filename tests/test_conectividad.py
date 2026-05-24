@@ -20,7 +20,8 @@ def test_ollama_chat():
     """Chat con modelo pequeño primero."""
     print("Test: Ollama Chat (qwen3.5:9b)...")
     resp = chat("qwen3.5:9b", [{"role": "user", "content": "Hola"}])
-    print(f"  OK — {resp[:50]}...")
+    content = resp.get("content", "")
+    print(f"  OK — {content[:50]}...")
     return True
 
 

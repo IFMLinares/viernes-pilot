@@ -6,6 +6,60 @@ from core.brain import chat
 from core.memory import search, save, learn_from_interaction, search_expanded
 from config import OLLAMA_MODEL, SYSTEM_PROMPT
 
+# Mapeo y esquemas de herramientas para Tool Calling
+from tools.sistema import abrir_programa, mostrar_notificacion
+
+FUNCIONES_MAP = {
+    "abrir_programa": abrir_programa,
+    "mostrar_notificacion": mostrar_notificacion
+}
+
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "abrir_programa",
+            "description": (
+                "Abre un programa o aplicación en el sistema (ej. bloc de notas, "
+                "editor de código, navegador, explorador, opencode, antigravity)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "programa": {
+                        "type": "string",
+                        "description": "El nombre o alias del programa a abrir."
+                    }
+                },
+                "required": ["programa"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "mostrar_notificacion",
+            "description": (
+                "Muestra una notificación emergente (alerta de sistema) en el escritorio del usuario."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "titulo": {
+                        "type": "string",
+                        "description": "El título de la notificación."
+                    },
+                    "mensaje": {
+                        "type": "string",
+                        "description": "El contenido o texto del mensaje de la notificación."
+                    }
+                },
+                "required": ["titulo", "mensaje"]
+            }
+        }
+    }
+]
+
 
 def build_messages(history: list[dict], contexto: str) -> list[dict]:
     """Arma el historial de mensajes para enviar a Ollama."""
@@ -57,16 +111,57 @@ def main():
             # Agregar mensaje del usuario al historial
             history.append({"role": "user", "content": user_input})
 
-            # Enviar a Ollama
+            # Enviar a Ollama con las herramientas disponibles
             messages = build_messages(history, contexto)
 
             print("viernes: ", end="", flush=True)
-            respuesta = chat(OLLAMA_MODEL, messages)
-            print(respuesta)
-            print()
+            response_msg = chat(OLLAMA_MODEL, messages, tools=TOOLS)
+            
+            # Bucle de orquestación de Tool Calling
+            tool_calls = response_msg.get("tool_calls", [])
+            
+            while tool_calls:
+                # Añadir respuesta del asistente (que contiene tool_calls) al historial
+                history.append(response_msg)
+                
+                for tool_call in tool_calls:
+                    func_name = tool_call["function"]["name"]
+                    func_args = tool_call["function"]["arguments"]
+                    
+                    print(f"\n[Ejecutando herramienta] {func_name}({func_args})...")
+                    
+                    func_to_call = FUNCIONES_MAP.get(func_name)
+                    if func_to_call:
+                        try:
+                            result = func_to_call(**func_args)
+                        except Exception as err:
+                            result = f"Error ejecutando función: {err}"
+                    else:
+                        result = f"Error: La función '{func_name}' no está registrada."
+                        
+                    print(f"[Resultado] {result}\n")
+                    
+                    # Añadir el resultado del tool al historial
+                    history.append({
+                        "role": "tool",
+                        "name": func_name,
+                        "content": result
+                    })
+                
+                # Volver a invocar el chat con el historial que ya incluye el resultado de las herramientas
+                messages = build_messages(history, contexto)
+                print("viernes: ", end="", flush=True)
+                response_msg = chat(OLLAMA_MODEL, messages, tools=TOOLS)
+                tool_calls = response_msg.get("tool_calls", [])
+            
+            # Una vez terminadas las herramientas, imprimir la respuesta final de texto
+            respuesta = response_msg.get("content", "")
+            if respuesta:
+                print(respuesta)
+                print()
 
-            # Agregar respuesta del asistente al historial
-            history.append({"role": "assistant", "content": respuesta})
+            # Agregar respuesta final del asistente al historial
+            history.append(response_msg)
 
             # Limitar el historial para no saturar el contexto
             if len(history) > 20:

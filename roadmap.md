@@ -18,18 +18,18 @@
 ### Fase 1 — Fundación *(hoy)*
 - [x] Estructura del proyecto
 - [x] Tests de conectividad
-- [ ] **main.py con REPL interactivo** ← siguiente paso
-- [ ] Primera conversación funcional
+- [x] **main.py con REPL interactivo**
+- [x] Primera conversación funcional
 
 ### Fase 2 — Core Features *(esta semana)*
-- [ ] Loop interactivo: entrada → contexto → respuesta
+- [x] Loop interactivo: entrada → contexto → respuesta
 - [ ] `tools/sistema.py`: abrir apps (antigravity, opencode, etc)
 - [ ] `tools/buscar.py`: web scraping básico
 - [ ] Monitor: "avisame cuando termine X"
 
 ### Fase 3 — Inteligencia *(próximo mes)*
 - [ ] RAG mejorado (better embeddings, chunking)
-- [ ] Contexto acumulativo (memoria de conversación)
+- [x] Contexto acumulativo (memoria de conversación)
 - [ ] Más herramientas de sistema
 
 ### Fase 4 — Voz *(futuro)*

@@ -169,7 +169,8 @@ Decidí qué actualizaciones realizar en la memoria persistente."""
     ]
 
     try:
-        reply = chat(OLLAMA_MODEL, messages)
+        reply_msg = chat(OLLAMA_MODEL, messages)
+        reply = reply_msg.get("content", "")
         data = extract_json(reply)
         updates = data.get("updates", [])
         
