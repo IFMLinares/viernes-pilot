@@ -30,10 +30,10 @@ source .venv/bin/activate
 
 Para ejecutar todas las pruebas del proyecto:
 ```bash
-python3 -m unittest discover -s tests
+python -m unittest discover -s tests
 ```
 
 Para ejecutar un archivo de pruebas específico:
 ```bash
-python3 -m unittest tests/test_sistema.py
+python -m unittest tests/test_sistema.py
 ```
