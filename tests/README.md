@@ -30,10 +30,10 @@ source .venv/bin/activate
 
 To execute all tests in the suite:
 ```bash
-python3 -m unittest discover -s tests
+python -m unittest discover -s tests
 ```
 
 To run a specific test file:
 ```bash
-python3 -m unittest tests/test_sistema.py
+python -m unittest tests/test_sistema.py
 ```

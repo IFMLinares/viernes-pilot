@@ -55,7 +55,7 @@ No instales paquetes directamente en el Python del sistema. Se debe utilizar obl
 Asegúrate de que tu entorno virtual esté activo antes de iniciar la aplicación:
 
 ```bash
-python3 main.py
+python main.py
 ```
 
 ## Documentación Modular

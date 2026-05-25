@@ -55,7 +55,7 @@ Do not install packages directly into your system Python. A virtual environment 
 Ensure your virtual environment is active before running the application:
 
 ```bash
-python3 main.py
+python main.py
 ```
 
 ## Modular Documentation
