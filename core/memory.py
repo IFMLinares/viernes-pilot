@@ -1,9 +1,7 @@
 """Cliente Engram para memoria persistente."""
 import requests
 import json
-
-ENGRAM_URL = "http://localhost:7437"
-PROJECT = "viernes"
+from config import ENGRAM_URL, ENGRAM_PROJECT as PROJECT
 
 
 def search(query: str, limit: int = 5) -> list[dict]:

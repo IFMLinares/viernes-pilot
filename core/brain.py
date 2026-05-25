@@ -1,7 +1,6 @@
 """Cliente Ollama para chat y embeddings."""
 import requests
-
-OLLAMA_URL = "http://localhost:11434"
+from config import OLLAMA_URL
 
 
 def chat(model: str, messages: list[dict], format: str = None, tools: list[dict] = None) -> dict:
