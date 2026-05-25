@@ -44,6 +44,12 @@ No instales paquetes directamente en el Python del sistema. Se debe utilizar obl
    pip install -r requirements.txt
    ```
 
+5. Configura las variables de entorno:
+   Copia la plantilla de configuración `.env.example` como `.env` y personaliza los valores (como el nombre del modelo, la URL de Ollama o la de Engram):
+   ```bash
+   cp .env.example .env
+   ```
+
 ## Ejecución
 
 Asegúrate de que tu entorno virtual esté activo antes de iniciar la aplicación:

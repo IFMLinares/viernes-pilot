@@ -44,6 +44,12 @@ Do not install packages directly into your system Python. A virtual environment 
    pip install -r requirements.txt
    ```
 
+5. Configure environment variables:
+   Copy the template file `.env.example` to `.env` and customize your settings (e.g., model name, Ollama or Engram host addresses):
+   ```bash
+   cp .env.example .env
+   ```
+
 ## Execution
 
 Ensure your virtual environment is active before running the application:
