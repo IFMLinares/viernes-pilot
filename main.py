@@ -113,20 +113,15 @@ def main():
             if not user_input:
                 continue
 
-            # Armar contexto con búsqueda en memoria y depuración
-            memoria = search_expanded(user_input, limit=3)
-            if not memoria:
-                memoria = []
-            
-            print("\n--- DEBUG MEMORIA (Resultados de search()) ---")
-            if memoria:
-                for idx, item in enumerate(memoria):
-                    print(f"[{idx+1}] ID: {item.get('id')} | Título: '{item.get('title')}'")
-                    print(f"    Contenido: {item.get('content')}")
-                    print(f"    Rank/Score: {item.get('rank')}")
-            else:
-                print("No se encontraron recuerdos relevantes.")
-            print("---------------------------------------------\n")
+            # Armar contexto con búsqueda en memoria
+            memoria_raw = search_expanded(user_input, limit=3)
+            memoria = []
+            if memoria_raw:
+                # Filtrar solo memorias del asistente para evitar ruido de herramientas de desarrollo
+                memoria = [
+                    item for item in memoria_raw
+                    if item and item.get("type") in ["conversacion", "manual"]
+                ]
 
             contexto = ""
             if memoria:
