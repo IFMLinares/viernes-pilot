@@ -35,6 +35,20 @@ MESSAGES = {
                         "VIERNES_OLLAMA_AUTOSTART debe ser true o false."),
     "timeout_error": ("VIERNES_OLLAMA_STARTUP_TIMEOUT must be numeric.",
                       "VIERNES_OLLAMA_STARTUP_TIMEOUT debe ser un número."),
+    "all_areas": ("All areas", "Todas las áreas"),
+    "history": ("Full history", "Historial completo"),
+    "recent": ("Recent and upcoming", "Recientes y próximos"),
+    "overdue": ("Older overdue pending", "Vencidos anteriores pendientes"),
+    "undated": ("Pending without a deadline", "Pendientes sin fecha"),
+    "empty_scope": ("No commitments in the queried scope.", "No hay compromisos en el alcance consultado."),
+    "clarify_area": ("Which area: university, work or personal?", "¿De qué área: universidad, trabajo o personal?"),
+    "clarify_date": ("What is the complete date or date range, including the year?",
+                     "¿Cuál es la fecha o el período completo, incluido el año?"),
+    "clarify_id": ("Which commitment ID? Use /list to find it.", "¿Cuál es el ID del compromiso? Usa /list para consultarlo."),
+    "clarify_scope": ("Use the usual period, a date range, or explicitly request full history?",
+                      "¿Quieres el período habitual, un rango de fechas o consultar explícitamente todo el historial?"),
+    "clarify_request": ("Would you like to create, list, edit or complete a commitment?",
+                        "¿Quieres registrar, consultar, editar o completar un compromiso?"),
 }
 
 
@@ -76,12 +90,15 @@ def help_text(language):
                         "Proponer completar un compromiso.", "Aplicar exactamente la propuesta mostrada.",
                         "Descartar propuesta y aclaraciones.", "Mostrar comandos.", "Salir."]
         end = "Describe compromisos en español o inglés; los comandos conservan el último idioma.\nTodavía no hay recordatorios ni planificación automática."
-    commands = ["/list [university|work|personal]", '/edit ID {"due_date":"2026-11-24"}',
+    commands = ["/list [university|work|personal] [--all]", '/edit ID {"due_date":"2026-11-24"}',
                 "/done ID", "/confirm", "/cancel", "/help", "/quit"]
     lines = [intro, '  /new {"title":"Report","area":"university","due_date":"2026-11-23"}']
     lines.extend(f"  {command} — {description}" for command, description in zip(commands, descriptions))
     fields = ("Fields" if language == "en" else "Campos") + ": title, area, project, due_date (YYYY-MM-DD | null)."
-    return "\n".join([*lines, fields, end])
+    scope = ("Default: last 7 days onward, plus older overdue and undated pending; --all includes full history."
+             if language == "en" else
+             "Por defecto: últimos 7 días en adelante, más vencidos anteriores y pendientes sin fecha; --all incluye todo el historial.")
+    return "\n".join([*lines, fields, scope, end])
 
 
 def deadline(value, language):
@@ -118,6 +135,30 @@ def records(rows, language):
 def display_value(value):
     """Keep user/model fields on one line without terminal control sequences."""
     return "".join(char if char.isprintable() else f"\\u{ord(char):04x}" for char in value)
+
+
+def query_records(result, language):
+    area = text(result["area"], language) if result["area"] else text("all_areas", language)
+    if result["scope"] == "all":
+        heading = text("history", language)
+    elif result["scope"] == "range":
+        heading = f"{deadline(result['start_date'], language)} → {deadline(result['end_date'], language)}"
+    else:
+        start = deadline(result["start_date"], language)
+        heading = f"From {start} onward" if language == "en" else f"Desde {start} en adelante"
+    heading += f" · {area}"
+    rows = result["rows"]
+    if not rows:
+        return heading + "\n" + text("empty_scope", language)
+    if result["scope"] != "current":
+        return heading + "\n" + records(rows, language)
+    groups = {
+        "recent": [row for row in rows if row["due_date"] is not None and row["due_date"] >= result["start_date"]],
+        "overdue": [row for row in rows if row["due_date"] is not None and row["due_date"] < result["start_date"]],
+        "undated": [row for row in rows if row["due_date"] is None],
+    }
+    return "\n\n".join([heading, *[text(key, language) + "\n" + records(group, language)
+                                    for key, group in groups.items() if group]])
 
 
 def proposal(value, language):

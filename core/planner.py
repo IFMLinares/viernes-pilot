@@ -10,9 +10,10 @@ import requests
 
 from core.commitments import AREAS, CommitmentStore, validate_fields
 from core.ollama_runtime import ensure_ollama, local_url
+from core.queries import history_requested, listing_request
 from core.presentation import (
     help_text, initial_language, input_language, records, proposal as render_proposal,
-    runtime_message, text as ui_text,
+    runtime_message, query_records, text as ui_text,
 )
 
 HELP = help_text("en")
@@ -32,7 +33,10 @@ SCHEMA = {
             "project": {"type": ["string", "null"]}, "due_date": {"type": ["string", "null"]},
         }, "additionalProperties": False},
         "area": {"type": ["string", "null"], "enum": [*AREAS, None]},
-        "question": {"type": ["string", "null"]},
+        "clarification": {"type": "string", "enum": ["area", "date", "id", "scope", "request"]},
+        "scope": {"type": "string", "enum": ["current", "all", "range"]},
+        "start_date": {"type": "string"},
+        "end_date": {"type": "string"},
     },
     "required": ["action", "language"], "additionalProperties": False,
 }
@@ -52,12 +56,16 @@ def ollama_interpreter(url, model):
             "For ambiguous short input retain the preceding conversation language. "
             "Preserve the user's title language. Never invent deadlines, years, owners, or IDs. "
             "Resolve explicit relative dates using today; for incomplete or ambiguous dates, "
-            "unclear areas, unsupported requests or unknown IDs, action=clarify and ask a short "
-            "question in the user's language. No deadline is allowed when none was specified. "
+            "unclear areas, unsupported requests or missing IDs, action=clarify with clarification "
+            "set to date, area, scope, request or id. Do not generate an answer or question. "
+            "No deadline is allowed when none was specified. "
             "A date without a year requires clarification unless the year is explicit in context. "
-            "For create return items; list optionally area; edit id and fields; complete id. "
+            "For create return items; list optionally area and scope; edit id and fields; complete id. "
             "Do not claim anything is saved. You cannot confirm or execute a proposal. "
-            "Listing returns all statuses in one area or all areas; do not promise other filters."
+            "For queries always return list, never infer whether stored data exists. "
+            "Default scope=current; use all only for explicitly requested full history. "
+            "For an explicit period use scope=range and complete inclusive ISO start_date/end_date. "
+            "Listing returns all statuses; unsupported filters require clarification=request."
         )
         response = requests.post(
             f"{url}/api/chat", json={"model": model, "stream": False, "format": SCHEMA,
@@ -117,7 +125,14 @@ class Planner:
             return ui_text("pending", self.language)
         command, _, rest = text.partition(" ")
         if command == "/list":
-            return records(self.store.list(rest.strip() or None), self.language)
+            options = rest.split()
+            if options.count("--all") > 1:
+                raise ValueError("Usage: /list [university|work|personal] [--all]")
+            areas = [option for option in options if option != "--all"]
+            if len(areas) > 1 or (areas and areas[0] not in AREAS):
+                raise ValueError("Usage: /list [university|work|personal] [--all]")
+            result = self.store.query(areas[0] if areas else None, scope="all" if "--all" in options else "current")
+            return query_records(result, self.language)
         if command == "/new":
             result = {"action": "create", "items": [json.loads(rest)]}
         elif command in ("/edit", "/done"):
@@ -130,16 +145,18 @@ class Planner:
         elif text.startswith("/"):
             raise ValueError("Unknown command. Use /help.")
         else:
-            if self.interpreter is None:
-                return ui_text("offline", self.language)
-            if len(self.history) >= 12:
-                self.reset()
-                return ui_text("limit", self.language)
-            language_context = {"role": "system", "content": (
-                f"Current conversation language: {self.language}. "
-                "For ambiguous short input retain it; otherwise follow the latest user's language."
-            )}
-            result = self.interpreter(text, [language_context, *self.history])
+            result = listing_request(text)
+            if result is None:
+                if self.interpreter is None:
+                    return ui_text("offline", self.language)
+                if len(self.history) >= 12:
+                    self.reset()
+                    return ui_text("limit", self.language)
+                language_context = {"role": "system", "content": (
+                    f"Current conversation language: {self.language}. "
+                    "For ambiguous short input retain it; otherwise follow the latest user's language."
+                )}
+                result = self.interpreter(text, [language_context, *self.history])
         if not isinstance(result, dict):
             raise ValueError("Expected a structured proposal.")
         if "language" in result:
@@ -147,17 +164,22 @@ class Planner:
                 raise ValueError("Language must be en or es.")
             self.language = result["language"]
         action = result.get("action")
+        if action == "list" and result.get("scope") == "all" and not history_requested(text):
+            result = {"action": "clarify", "clarification": "scope"}
+            action = "clarify"
         if action == "clarify":
-            question = result.get("question")
-            if not isinstance(question, str) or not question.strip():
-                raise ValueError("Missing clarification question.")
+            reason = result.get("clarification", "request")
+            if reason not in ("area", "date", "id", "scope", "request"):
+                raise ValueError("Unsupported clarification reason.")
+            question = ui_text(f"clarify_{reason}", self.language)
             self.history.extend([{"role": "user", "content": text}, {"role": "assistant", "content": question}])
             self.sources.append(text)
             return question
         if action == "list":
-            rows = self.store.list(result.get("area"))
+            result = self.store.query(result.get("area"), scope=result.get("scope", "current"),
+                                      start_date=result.get("start_date"), end_date=result.get("end_date"))
             self.reset()
-            return records(rows, self.language)
+            return query_records(result, self.language)
         change = {"action": action}
         if action == "create":
             items = result.get("items")
