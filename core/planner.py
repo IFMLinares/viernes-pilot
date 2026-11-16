@@ -1,4 +1,5 @@
 """Opt-in text planner. No Engram writes, audio or system-action tools."""
+import contextvars
 import json
 import os
 import sqlite3
@@ -10,7 +11,7 @@ from pathlib import Path
 import requests
 
 from core.commitments import AREAS, CommitmentStore, validate_fields
-from core.diagnostics import Diagnostics
+from core.diagnostics import Diagnostics, parse_metadata
 from core.ollama_runtime import ensure_ollama, local_url
 from core.queries import history_requested, listing_request
 from core.presentation import (
@@ -19,6 +20,10 @@ from core.presentation import (
 )
 
 HELP = help_text("en")
+
+# Call-scoped diagnostics for interpreter parse metadata. Never mutate the shared
+# interpreter closure; Planners bind their own adapter per instance.
+_interpreter_diagnostics = contextvars.ContextVar("_interpreter_diagnostics", default=None)
 
 SCHEMA = {
     "type": "object",
@@ -74,12 +79,15 @@ class _ClarificationLimit(Exception):
     pass
 
 
-def ollama_interpreter(url, model, today=None, timeout=(3, 90)):
+def ollama_interpreter(url, model, today=None, timeout=(3, 90), diagnostics=None):
     url = local_url(url)
     if url is None:
         raise ValueError("Only the local Ollama endpoint is supported.")
 
     def interpret(text, history):
+        effective_diagnostics = _interpreter_diagnostics.get()
+        if effective_diagnostics is None:
+            effective_diagnostics = diagnostics
         reference = (today or date.today()).isoformat()
         prompt = (
             "You are Viernes, a local conversational assistant specializing in personal commitments. "
@@ -116,8 +124,60 @@ def ollama_interpreter(url, model, today=None, timeout=(3, 90)):
         if response.status_code != 200:
             raise ValueError(f"Ollama returned HTTP {response.status_code}.")
         response.raise_for_status()
-        return json.loads(response.json()["message"]["content"])
+        try:
+            envelope = response.json()
+        except json.JSONDecodeError as exc:
+            meta = {"parse_stage": "envelope", "content_exists": False,
+                    "content_type": "null", "content_empty": True,
+                    "json_error_line": exc.lineno, "json_error_column": exc.colno,
+                    "json_error_position": exc.pos}
+            exc._parse_metadata = meta
+            if effective_diagnostics is not None:
+                effective_diagnostics.emit(**meta)
+            raise
+        try:
+            content = envelope["message"]["content"]
+        except (KeyError, TypeError) as exc:
+            meta = parse_metadata(envelope)
+            meta["parse_stage"] = "content"
+            exc._parse_metadata = meta
+            if effective_diagnostics is not None:
+                effective_diagnostics.emit(**meta)
+            raise
+        try:
+            result = json.loads(content)
+        except (json.JSONDecodeError, TypeError) as exc:
+            meta = parse_metadata(envelope, exc=exc if isinstance(exc, json.JSONDecodeError) else None)
+            meta["parse_stage"] = "content"
+            exc._parse_metadata = meta
+            if effective_diagnostics is not None:
+                effective_diagnostics.emit(**meta)
+            raise
+        if effective_diagnostics is not None:
+            effective_diagnostics.emit(**parse_metadata(envelope))
+        return result
+    interpret._viernes_ollama_interpreter = True
     return interpret
+
+
+class _DiagnosticAdapter:
+    """Bind an ollama_interpreter closure to a per-Planner diagnostics sink.
+
+    Uses a context variable for the duration of the call, so the shared
+    interpreter closure is never mutated and disabled Planners never inherit
+    another Planner's sink.
+    """
+
+    def __init__(self, interpreter, diagnostics):
+        self.interpreter = interpreter
+        self.diagnostics = diagnostics
+
+    def __call__(self, text, history):
+        token = _interpreter_diagnostics.set(self.diagnostics)
+        try:
+            return self.interpreter(text, history)
+        finally:
+            _interpreter_diagnostics.reset(token)
 
 
 class Planner:
@@ -134,6 +194,12 @@ class Planner:
         self.diagnostics = diagnostics or Diagnostics(None)
         self._last_action = None
         self._last_route = None
+        self._last_parse_metadata = None
+        # Bind every production closure, including disabled Planners, so a
+        # factory's standalone sink cannot escape into another Planner's call.
+        # Custom callbacks retain their existing two-argument interface.
+        if interpreter is not None and getattr(interpreter, "_viernes_ollama_interpreter", False) is True:
+            interpreter = _DiagnosticAdapter(interpreter, self.diagnostics)
         self.interpreter = interpreter
 
     def reset(self):
@@ -202,6 +268,7 @@ class Planner:
             return ""
         self._last_action = None
         self._last_route = None
+        self._last_parse_metadata = None
         start = time.perf_counter()
         route = "command"
         outcome = None
@@ -348,11 +415,16 @@ class Planner:
         except Exception as exc:
             outcome = outcome or "error"
             error_code = _error_code(exc)
+            meta = getattr(exc, "_parse_metadata", None)
+            if isinstance(meta, dict):
+                self._last_parse_metadata = meta
             raise
         finally:
             emitted_route = self._last_route if self._last_route is not None else route
             emit_kwargs = dict(route=emitted_route, outcome=outcome, stage="respond", error_code=error_code,
                                duration_ms=self.diagnostics.measure(start), **filters)
+            if isinstance(self._last_parse_metadata, dict):
+                emit_kwargs.update({k: v for k, v in self._last_parse_metadata.items() if v is not None})
             self._emit(**emit_kwargs)
 
 
