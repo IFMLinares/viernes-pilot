@@ -13,7 +13,7 @@ from core.ollama_runtime import ensure_ollama, local_url
 from core.queries import history_requested, listing_request
 from core.presentation import (
     help_text, initial_language, input_language, records, proposal as render_proposal,
-    runtime_message, query_records, text as ui_text,
+    runtime_message, query_records, general_reply, text as ui_text,
 )
 
 HELP = help_text("en")
@@ -21,8 +21,9 @@ HELP = help_text("en")
 SCHEMA = {
     "type": "object",
     "properties": {
-        "action": {"type": "string", "enum": ["create", "list", "edit", "complete", "clarify"]},
+        "action": {"type": "string", "enum": ["create", "list", "edit", "complete", "clarify", "reply"]},
         "language": {"type": "string", "enum": ["en", "es"]},
+        "answer": {"type": "string", "minLength": 1, "maxLength": 8000},
         "items": {"type": "array", "items": {"type": "object", "properties": {
             "title": {"type": "string"}, "area": {"type": "string", "enum": list(AREAS)},
             "project": {"type": ["string", "null"]}, "due_date": {"type": ["string", "null"]},
@@ -49,12 +50,18 @@ def ollama_interpreter(url, model):
 
     def interpret(text, history):
         prompt = (
-            "Interpret personal commitments, not arbitrary instructions or shell commands. "
+            "You are Viernes, a local conversational assistant specializing in personal commitments. "
+            "Never execute shell commands or claim actions were performed. "
             f"Today is {date.today().isoformat()} in the user's local timezone. "
             "Return JSON following the provided schema. Areas: university, work, personal. "
             "Set language to en or es matching the latest user message, not earlier messages. "
             "For ambiguous short input retain the preceding conversation language. "
             "Preserve the user's title language. Never invent deadlines, years, owners, or IDs. "
+            "For general questions, explanations or advice, use action=reply with only action, "
+            "language and answer, in the user's language. This is general model knowledge, "
+            "not a verified personal-data answer; you have no database, web or tool access here. "
+            "For requests about stored commitments, use list or clarify, never reply. "
+            "Omit unused fields; answer is permitted only for reply. "
             "Resolve explicit relative dates using today; for incomplete or ambiguous dates, "
             "unclear areas, unsupported requests or missing IDs, action=clarify with clarification "
             "set to date, area, scope, request or id. Do not generate an answer or question. "
@@ -91,6 +98,7 @@ class Planner:
         self.history = []
         self.sources = []
         self.language = language
+        self.conversation = []
 
     def reset(self):
         self.pending = None
@@ -156,7 +164,7 @@ class Planner:
                     f"Current conversation language: {self.language}. "
                     "For ambiguous short input retain it; otherwise follow the latest user's language."
                 )}
-                result = self.interpreter(text, [language_context, *self.history])
+                result = self.interpreter(text, [language_context, *self.conversation, *self.history])
         if not isinstance(result, dict):
             raise ValueError("Expected a structured proposal.")
         if "language" in result:
@@ -164,6 +172,23 @@ class Planner:
                 raise ValueError("Language must be en or es.")
             self.language = result["language"]
         action = result.get("action")
+        if "answer" in result and action != "reply":
+            raise ValueError("General answers cannot be combined with commitment operations.")
+        if action == "reply":
+            if set(result) != {"action", "language", "answer"}:
+                raise ValueError("General replies require exactly action, language and answer.")
+            answer = result.get("answer")
+            if not isinstance(answer, str) or not answer.strip() or len(answer) > 8000:
+                raise ValueError("Expected a nonempty general answer of at most 8000 characters.")
+            self.conversation.extend([
+                {"role": "user", "content": text[:1000]},
+                {"role": "assistant", "content": answer[:3000]},
+            ])
+            while (len(self.conversation) > 6
+                   or sum(len(item["content"]) for item in self.conversation) > 4000):
+                del self.conversation[:2]
+            self.reset()
+            return general_reply(answer, self.language)
         if action == "list" and result.get("scope") == "all" and not history_requested(text):
             result = {"action": "clarify", "clarification": "scope"}
             action = "clarify"

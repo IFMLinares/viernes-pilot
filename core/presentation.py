@@ -4,8 +4,8 @@ import re
 from datetime import date
 
 MESSAGES = {
-    "welcome": ("Viernes planner — /help for commands; /confirm applies a proposal.",
-                "Organizador Viernes — /help muestra comandos; /confirm aplica una propuesta."),
+    "welcome": ("Viernes — general questions and commitments; /help for commands; /confirm applies a proposal.",
+                "Viernes — preguntas generales y compromisos; /help muestra comandos; /confirm aplica una propuesta."),
     "prompt": ("you: ", "tú: "),
     "goodbye": ("Goodbye. Unconfirmed proposals were not saved.", "Hasta luego. Las propuestas sin confirmar no se guardaron."),
     "cancelled": ("Cancelled. No changes saved.", "Cancelado. No se guardaron cambios."),
@@ -49,6 +49,8 @@ MESSAGES = {
                       "¿Quieres el período habitual, un rango de fechas o consultar explícitamente todo el historial?"),
     "clarify_request": ("Would you like to create, list, edit or complete a commitment?",
                         "¿Quieres registrar, consultar, editar o completar un compromiso?"),
+    "general_reply": ("AI reply · General information (no commitment lookup)",
+                      "Respuesta de IA · Información general (sin consultar tus compromisos)"),
 }
 
 
@@ -83,13 +85,13 @@ def help_text(language):
         descriptions = ["Show pending and completed commitments.", "Propose changed fields; null removes a date.",
                         "Propose completion.", "Apply exactly the displayed proposal.",
                         "Discard proposal and clarification context.", "Show commands.", "Exit."]
-        end = "Describe commitments in English or Spanish; commands keep the last language.\nNo background reminders or automatic scheduling yet."
+        end = "Describe commitments or ask general questions in English or Spanish; commands keep the last language.\nGeneral answers are not verified personal-data results. No background reminders or automatic scheduling yet."
     else:
         intro = "Comandos (también disponibles sin IA):"
         descriptions = ["Mostrar compromisos pendientes y completados.", "Proponer cambios; null elimina una fecha.",
                         "Proponer completar un compromiso.", "Aplicar exactamente la propuesta mostrada.",
                         "Descartar propuesta y aclaraciones.", "Mostrar comandos.", "Salir."]
-        end = "Describe compromisos en español o inglés; los comandos conservan el último idioma.\nTodavía no hay recordatorios ni planificación automática."
+        end = "Describe compromisos o haz preguntas generales en español o inglés; los comandos conservan el último idioma.\nLas respuestas generales no son resultados verificados sobre tus datos. Todavía no hay recordatorios ni planificación automática."
     commands = ["/list [university|work|personal] [--all]", '/edit ID {"due_date":"2026-11-24"}',
                 "/done ID", "/confirm", "/cancel", "/help", "/quit"]
     lines = [intro, '  /new {"title":"Report","area":"university","due_date":"2026-11-23"}']
@@ -135,6 +137,11 @@ def records(rows, language):
 def display_value(value):
     """Keep user/model fields on one line without terminal control sequences."""
     return "".join(char if char.isprintable() else f"\\u{ord(char):04x}" for char in value)
+
+
+def general_reply(answer, language):
+    body = "\n".join(display_value(line) for line in answer.strip().split("\n"))
+    return text("general_reply", language) + "\n" + body
 
 
 def query_records(result, language):
