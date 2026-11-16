@@ -200,4 +200,11 @@ def main():
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Viernes local assistant")
+    parser.add_argument("--planner", action="store_true", help="Run the text commitments planner (no voice or OS tools)")
+    args = parser.parse_args()
+    if args.planner:
+        from core.planner import main as planner_main
+        raise SystemExit(planner_main())
     main()

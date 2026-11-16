@@ -22,6 +22,9 @@ No automatic merge or defect closure is authorized by this publication.
 `respond("/confirm")` persists them. Tests inject an explicit synthetic store.
 Run `python -B -m unittest tests.test_commitments`. CLI wiring follows separately.
 
+The next review boundary adds `python main.py --planner`; see the
+[CLI foundation guide](docs/planner-cli/README.md) for scope and safety limits.
+
 ## Prerequisites
 
 - **Python**: Version 3.12 or higher.
