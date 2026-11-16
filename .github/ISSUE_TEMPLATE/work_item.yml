@@ -1,0 +1,37 @@
+name: Work item / Tarea acotada
+description: Plan one reviewable delivery with explicit boundaries. / Planifica una entrega revisable con límites claros.
+title: "[Work] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective / Objetivo
+      description: Explain the outcome in English and Spanish. / Explica el resultado en inglés y español.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope / Alcance
+      description: Include what belongs to this unit and what does not. / Indica qué pertenece a esta unidad y qué queda fuera.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria / Criterios de aceptación
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Verification and limitations / Verificación y limitaciones
+      description: Record actual checks, failures and unverified behavior. / Registra comprobaciones reales, fallos y comportamiento no verificado.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies / Dependencias
+      description: Link prerequisite and follow-up work without claiming unresolved defects are fixed. / Enlaza requisitos y trabajo posterior sin declarar resueltos los fallos pendientes.
