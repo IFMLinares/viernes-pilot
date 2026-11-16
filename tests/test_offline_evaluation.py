@@ -10,6 +10,59 @@ from unittest.mock import patch
 from core.commitments import CommitmentStore
 from core.diagnostics import ALLOWED_KEYS, Diagnostics, _safe_completion_reason, _safe_type_name, parse_metadata
 from core.planner import Planner, ollama_interpreter
+from tools import evaluate_interpreter
+
+
+class SemanticDefaultNormalizationTests(unittest.TestCase):
+    """S8: omitted list scope means current; explicit invalid/null/wrong filters stay rejected."""
+
+    def test_omitted_list_scope_normalizes_to_current_and_matches_explicit_current(self):
+        actual = {"action": "list", "language": "en", "area": "university"}
+        expected = {"action": "list", "language": "en", "area": "university", "scope": "current"}
+        evaluate_interpreter.validate_action_contract(actual)
+        self.assertTrue(evaluate_interpreter.actions_equal(actual, expected))
+
+    def test_omitted_scope_both_ways_is_equivalent(self):
+        a = {"action": "list", "language": "es", "area": "work"}
+        b = {"action": "list", "language": "es", "area": "work", "scope": "current"}
+        self.assertTrue(evaluate_interpreter.actions_equal(a, b))
+        self.assertTrue(evaluate_interpreter.actions_equal(b, a))
+
+    def test_explicit_none_scope_is_not_normalized(self):
+        actual = {"action": "list", "language": "en", "area": "university", "scope": None}
+        expected = {"action": "list", "language": "en", "area": "university", "scope": "current"}
+        with self.assertRaises(ValueError):
+            evaluate_interpreter.validate_action_contract(actual)
+        self.assertFalse(evaluate_interpreter.actions_equal(actual, expected))
+
+    def test_explicit_invalid_scope_is_not_normalized(self):
+        actual = {"action": "list", "language": "en", "area": "university", "scope": "invalid"}
+        expected = {"action": "list", "language": "en", "area": "university", "scope": "current"}
+        with self.assertRaises(ValueError):
+            evaluate_interpreter.validate_action_contract(actual)
+        self.assertFalse(evaluate_interpreter.actions_equal(actual, expected))
+
+    def test_explicit_wrong_area_is_not_forgiven(self):
+        actual = {"action": "list", "language": "en", "area": "work", "scope": "current"}
+        expected = {"action": "list", "language": "en", "area": "university", "scope": "current"}
+        self.assertFalse(evaluate_interpreter.actions_equal(actual, expected))
+
+    def test_explicit_wrong_dates_are_not_forgiven(self):
+        actual = {"action": "list", "language": "en", "area": "university", "scope": "range",
+                  "start_date": "2026-11-01", "end_date": "2026-11-15"}
+        expected = {"action": "list", "language": "en", "area": "university", "scope": "range",
+                    "start_date": "2026-11-01", "end_date": "2026-11-30"}
+        self.assertFalse(evaluate_interpreter.actions_equal(actual, expected))
+
+    def test_non_list_actions_ignore_scope_default(self):
+        actual = {"action": "create", "language": "es", "items": [{"title": "X", "area": "university"}]}
+        expected = {"action": "create", "language": "es", "items": [{"title": "Y", "area": "university"}]}
+        self.assertTrue(evaluate_interpreter.actions_equal(actual, expected))
+
+    def test_validate_action_contract_still_requires_language(self):
+        with self.assertRaises(ValueError):
+            evaluate_interpreter.validate_action_contract({"action": "list", "area": "university"})
+
 
 
 class ParseMetadataSanitizationTests(unittest.TestCase):
