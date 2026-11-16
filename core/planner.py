@@ -3,12 +3,14 @@ import json
 import os
 import sqlite3
 import sys
+import time
 from datetime import date
 from pathlib import Path
 
 import requests
 
 from core.commitments import AREAS, CommitmentStore, validate_fields
+from core.diagnostics import Diagnostics
 from core.ollama_runtime import ensure_ollama, local_url
 from core.queries import history_requested, listing_request
 from core.presentation import (
@@ -43,16 +45,46 @@ SCHEMA = {
 }
 
 
-def ollama_interpreter(url, model):
+def _error_code(exc):
+    if isinstance(exc, requests.Timeout):
+        return "timeout"
+    if isinstance(exc, requests.ConnectionError):
+        return "connection"
+    if isinstance(exc, requests.RequestException):
+        return "network"
+    if isinstance(exc, json.JSONDecodeError):
+        return "invalid_json"
+    if isinstance(exc, sqlite3.Error):
+        return "storage"
+    if isinstance(exc, (ValueError, TypeError, KeyError)):
+        message = str(exc).lower()
+        if "area must be" in message or "due_date must be" in message or "title must be" in message:
+            return "invalid_fields"
+        if "unknown query scope" in message:
+            return "invalid_scope"
+        return "invalid_structure"
+    return "unexpected"
+
+
+class _InterpreterUnavailable(Exception):
+    pass
+
+
+class _ClarificationLimit(Exception):
+    pass
+
+
+def ollama_interpreter(url, model, today=None, timeout=(3, 90)):
     url = local_url(url)
     if url is None:
         raise ValueError("Only the local Ollama endpoint is supported.")
 
     def interpret(text, history):
+        reference = (today or date.today()).isoformat()
         prompt = (
             "You are Viernes, a local conversational assistant specializing in personal commitments. "
             "Never execute shell commands or claim actions were performed. "
-            f"Today is {date.today().isoformat()} in the user's local timezone. "
+            f"Today is {reference} in the user's local timezone. "
             "Return JSON following the provided schema. Areas: university, work, personal. "
             "Set language to en or es matching the latest user message, not earlier messages. "
             "For ambiguous short input retain the preceding conversation language. "
@@ -79,7 +111,7 @@ def ollama_interpreter(url, model):
                 "options": {"temperature": 0, "num_ctx": 4096},
                 "messages": [{"role": "system", "content": prompt}, *history,
                              {"role": "user", "content": text}]},
-            timeout=(3, 90), allow_redirects=False, proxies={"http": "", "https": ""},
+            timeout=timeout, allow_redirects=False, proxies={"http": "", "https": ""},
         )
         if response.status_code != 200:
             raise ValueError(f"Ollama returned HTTP {response.status_code}.")
@@ -89,82 +121,47 @@ def ollama_interpreter(url, model):
 
 
 class Planner:
-    def __init__(self, store, interpreter=None, language="en"):
+    def __init__(self, store, interpreter=None, language="en", today=None, diagnostics=None):
         if language not in ("en", "es"):
             raise ValueError("Language must be en or es.")
         self.store = store
-        self.interpreter = interpreter
         self.pending = None
         self.history = []
         self.sources = []
         self.language = language
         self.conversation = []
+        self.today = today
+        self.diagnostics = diagnostics or Diagnostics(None)
+        self._last_action = None
+        self._last_route = None
+        self.interpreter = interpreter
 
     def reset(self):
         self.pending = None
         self.history.clear()
         self.sources.clear()
 
-    def respond(self, text):
-        text = text.strip()
-        if not text:
-            return ""
-        if not text.startswith("/"):
-            self.language = input_language(text, self.language)
-        if text == "/help":
-            return help_text(self.language)
-        if text == "/cancel":
-            self.reset()
-            return ui_text("cancelled", self.language)
-        if text == "/confirm":
-            if self.pending is None:
-                return ui_text("no_proposal", self.language)
-            proposal = self.pending
-            if proposal["action"] == "create":
-                saved = self.store.create_many(proposal["items"], proposal["source"])
-            elif proposal["action"] == "edit":
-                saved = self.store.edit(proposal["id"], proposal["fields"])
-            else:
-                saved = self.store.complete(proposal["id"])
-            self.reset()
-            rows = saved if isinstance(saved, list) else [saved]
-            return ui_text("saved", self.language) + ":\n" + records(rows, self.language)
-        if self.pending is not None and not (text == "/list" or text.startswith("/list ")):
-            return ui_text("pending", self.language)
-        command, _, rest = text.partition(" ")
-        if command == "/list":
-            options = rest.split()
-            if options.count("--all") > 1:
-                raise ValueError("Usage: /list [university|work|personal] [--all]")
-            areas = [option for option in options if option != "--all"]
-            if len(areas) > 1 or (areas and areas[0] not in AREAS):
-                raise ValueError("Usage: /list [university|work|personal] [--all]")
-            result = self.store.query(areas[0] if areas else None, scope="all" if "--all" in options else "current")
-            return query_records(result, self.language)
-        if command == "/new":
-            result = {"action": "create", "items": [json.loads(rest)]}
-        elif command in ("/edit", "/done"):
-            task_id, _, fields = rest.partition(" ")
-            result = {"action": "edit" if command == "/edit" else "complete", "id": int(task_id)}
-            if command == "/done" and fields.strip():
-                raise ValueError("Usage: /done ID")
-            if command == "/edit":
-                result["fields"] = json.loads(fields)
-        elif text.startswith("/"):
-            raise ValueError("Unknown command. Use /help.")
-        else:
-            result = listing_request(text)
-            if result is None:
-                if self.interpreter is None:
-                    return ui_text("offline", self.language)
-                if len(self.history) >= 12:
-                    self.reset()
-                    return ui_text("limit", self.language)
-                language_context = {"role": "system", "content": (
-                    f"Current conversation language: {self.language}. "
-                    "For ambiguous short input retain it; otherwise follow the latest user's language."
-                )}
-                result = self.interpreter(text, [language_context, *self.conversation, *self.history])
+    def _emit(self, **kwargs):
+        self.diagnostics.emit(**kwargs)
+
+    def _interpret_to_action(self, text):
+        """Return the structured action and route for a non-command user message."""
+        self._last_route = None
+        self._last_action = None
+        result = listing_request(text, today=self.today)
+        route = "fast_path"
+        if result is None:
+            route = "interpreter"
+            self._last_route = route
+            if self.interpreter is None:
+                raise _InterpreterUnavailable()
+            if len(self.history) >= 12:
+                raise _ClarificationLimit()
+            language_context = {"role": "system", "content": (
+                f"Current conversation language: {self.language}. "
+                "For ambiguous short input retain it; otherwise follow the latest user's language."
+            )}
+            result = self.interpreter(text, [language_context, *self.conversation, *self.history])
         if not isinstance(result, dict):
             raise ValueError("Expected a structured proposal.")
         if "language" in result:
@@ -180,15 +177,9 @@ class Planner:
             answer = result.get("answer")
             if not isinstance(answer, str) or not answer.strip() or len(answer) > 8000:
                 raise ValueError("Expected a nonempty general answer of at most 8000 characters.")
-            self.conversation.extend([
-                {"role": "user", "content": text[:1000]},
-                {"role": "assistant", "content": answer[:3000]},
-            ])
-            while (len(self.conversation) > 6
-                   or sum(len(item["content"]) for item in self.conversation) > 4000):
-                del self.conversation[:2]
-            self.reset()
-            return general_reply(answer, self.language)
+            self._last_action = result
+            self._last_route = route
+            return result, route
         if action == "list" and result.get("scope") == "all" and not history_requested(text):
             result = {"action": "clarify", "clarification": "scope"}
             action = "clarify"
@@ -196,37 +187,178 @@ class Planner:
             reason = result.get("clarification", "request")
             if reason not in ("area", "date", "id", "scope", "request"):
                 raise ValueError("Unsupported clarification reason.")
-            question = ui_text(f"clarify_{reason}", self.language)
-            self.history.extend([{"role": "user", "content": text}, {"role": "assistant", "content": question}])
-            self.sources.append(text)
-            return question
-        if action == "list":
-            result = self.store.query(result.get("area"), scope=result.get("scope", "current"),
-                                      start_date=result.get("start_date"), end_date=result.get("end_date"))
-            self.reset()
-            return query_records(result, self.language)
-        change = {"action": action}
-        if action == "create":
-            items = result.get("items")
-            if not isinstance(items, list) or not 1 <= len(items) <= 20:
-                raise ValueError("Expected between 1 and 20 commitments.")
-            change["items"] = [validate_fields(item) for item in items]
-            change["source"] = "\n".join([*self.sources, text])
-        elif action in ("edit", "complete"):
-            task_id = result.get("id")
-            change["id"] = self.store.get(task_id)["id"]
-            change["before"] = self.store.get(task_id)
-            if action == "edit":
-                change["fields"] = validate_fields(result.get("fields"), partial=True)
-        else:
-            raise ValueError("Unsupported proposal action.")
-        self.pending = change
-        return render_proposal(change, self.language)
+            self._last_action = result
+            self._last_route = route
+            return result, route
+        if action in ("create", "edit", "complete", "list"):
+            self._last_action = result
+            self._last_route = route
+            return result, route
+        raise ValueError("Unsupported proposal action.")
+
+    def respond(self, text):
+        text = text.strip()
+        if not text:
+            return ""
+        self._last_action = None
+        self._last_route = None
+        start = time.perf_counter()
+        route = "command"
+        outcome = None
+        error_code = None
+        filters = {}
+        try:
+            if not text.startswith("/"):
+                self.language = input_language(text, self.language)
+            if text == "/help":
+                outcome = "help"
+                return help_text(self.language)
+            if text == "/cancel":
+                outcome = "cancel"
+                self.reset()
+                return ui_text("cancelled", self.language)
+            if text == "/confirm":
+                if self.pending is None:
+                    outcome = "no_proposal"
+                    return ui_text("no_proposal", self.language)
+                proposal = self.pending
+                if proposal["action"] == "create":
+                    saved = self.store.create_many(proposal["items"], proposal["source"])
+                elif proposal["action"] == "edit":
+                    saved = self.store.edit(proposal["id"], proposal["fields"])
+                else:
+                    saved = self.store.complete(proposal["id"])
+                self.reset()
+                rows = saved if isinstance(saved, list) else [saved]
+                outcome = "confirm"
+                return ui_text("saved", self.language) + ":\n" + records(rows, self.language)
+            if self.pending is not None and not (text == "/list" or text.startswith("/list ")):
+                outcome = "pending_blocked"
+                return ui_text("pending", self.language)
+            command, _, rest = text.partition(" ")
+            if command == "/list":
+                options = rest.split()
+                if options.count("--all") > 1:
+                    raise ValueError("Usage: /list [university|work|personal] [--all]")
+                areas = [option for option in options if option != "--all"]
+                if len(areas) > 1 or (areas and areas[0] not in AREAS):
+                    raise ValueError("Usage: /list [university|work|personal] [--all]")
+                result = self.store.query(areas[0] if areas else None,
+                                          scope="all" if "--all" in options else "current",
+                                          today=self.today)
+                filters = {
+                    "filter_area": result["area"],
+                    "filter_scope": result["scope"],
+                    "filter_start_date": result["start_date"],
+                    "filter_end_date": result["end_date"],
+                    "count": len(result["rows"]),
+                }
+                outcome = "list"
+                return query_records(result, self.language)
+            if command == "/new":
+                result = {"action": "create", "items": [json.loads(rest)]}
+            elif command in ("/edit", "/done"):
+                task_id, _, fields = rest.partition(" ")
+                result = {"action": "edit" if command == "/edit" else "complete", "id": int(task_id)}
+                if command == "/done" and fields.strip():
+                    raise ValueError("Usage: /done ID")
+                if command == "/edit":
+                    result["fields"] = json.loads(fields)
+            elif text.startswith("/"):
+                raise ValueError("Unknown command. Use /help.")
+            else:
+                try:
+                    result, route = self._interpret_to_action(text)
+                except _InterpreterUnavailable:
+                    outcome = "offline"
+                    return ui_text("offline", self.language)
+                except _ClarificationLimit:
+                    self.reset()
+                    outcome = "limit"
+                    return ui_text("limit", self.language)
+            if not isinstance(result, dict):
+                raise ValueError("Expected a structured proposal.")
+            if "language" in result:
+                if result["language"] not in ("en", "es"):
+                    raise ValueError("Language must be en or es.")
+                self.language = result["language"]
+            action = result.get("action")
+            if "answer" in result and action != "reply":
+                raise ValueError("General answers cannot be combined with commitment operations.")
+            if action == "reply":
+                if set(result) != {"action", "language", "answer"}:
+                    raise ValueError("General replies require exactly action, language and answer.")
+                answer = result.get("answer")
+                if not isinstance(answer, str) or not answer.strip() or len(answer) > 8000:
+                    raise ValueError("Expected a nonempty general answer of at most 8000 characters.")
+                self.conversation.extend([
+                    {"role": "user", "content": text[:1000]},
+                    {"role": "assistant", "content": answer[:3000]},
+                ])
+                while (len(self.conversation) > 6
+                       or sum(len(item["content"]) for item in self.conversation) > 4000):
+                    del self.conversation[:2]
+                self.reset()
+                outcome = "reply"
+                return general_reply(answer, self.language)
+            if action == "list" and result.get("scope") == "all" and not history_requested(text):
+                result = {"action": "clarify", "clarification": "scope"}
+                action = "clarify"
+            if action == "clarify":
+                reason = result.get("clarification", "request")
+                if reason not in ("area", "date", "id", "scope", "request"):
+                    raise ValueError("Unsupported clarification reason.")
+                question = ui_text(f"clarify_{reason}", self.language)
+                self.history.extend([{"role": "user", "content": text}, {"role": "assistant", "content": question}])
+                self.sources.append(text)
+                outcome = "clarify"
+                return question
+            if action == "list":
+                result = self.store.query(result.get("area"), scope=result.get("scope", "current"),
+                                          start_date=result.get("start_date"), end_date=result.get("end_date"),
+                                          today=self.today)
+                filters = {
+                    "filter_area": result["area"],
+                    "filter_scope": result["scope"],
+                    "filter_start_date": result["start_date"],
+                    "filter_end_date": result["end_date"],
+                    "count": len(result["rows"]),
+                }
+                outcome = "list"
+                self.reset()
+                return query_records(result, self.language)
+            change = {"action": action}
+            if action == "create":
+                items = result.get("items")
+                if not isinstance(items, list) or not 1 <= len(items) <= 20:
+                    raise ValueError("Expected between 1 and 20 commitments.")
+                change["items"] = [validate_fields(item) for item in items]
+                change["source"] = "\n".join([*self.sources, text])
+            elif action in ("edit", "complete"):
+                task_id = result.get("id")
+                change["id"] = self.store.get(task_id)["id"]
+                change["before"] = self.store.get(task_id)
+                if action == "edit":
+                    change["fields"] = validate_fields(result.get("fields"), partial=True)
+            else:
+                raise ValueError("Unsupported proposal action.")
+            self.pending = change
+            outcome = action
+            return render_proposal(change, self.language)
+        except Exception as exc:
+            outcome = outcome or "error"
+            error_code = _error_code(exc)
+            raise
+        finally:
+            emitted_route = self._last_route if self._last_route is not None else route
+            emit_kwargs = dict(route=emitted_route, outcome=outcome, stage="respond", error_code=error_code,
+                               duration_ms=self.diagnostics.measure(start), **filters)
+            self._emit(**emit_kwargs)
 
 
-def run_repl(store, interpreter=None, output=None, language=None):
+def run_repl(store, interpreter=None, output=None, language=None, diagnostics=None):
     output = output or sys.stdout
-    planner = Planner(store, interpreter, language=language or initial_language())
+    planner = Planner(store, interpreter, language=language or initial_language(), diagnostics=diagnostics)
     print(ui_text("welcome", planner.language), file=output)
     while True:
         try:
@@ -248,7 +380,7 @@ def run_repl(store, interpreter=None, output=None, language=None):
             print(ui_text("storage_error", planner.language), file=output)
 
 
-def main():
+def main(diagnostics=None):
     # Import legacy configuration only at entry, not in the domain or test paths.
     from config import OLLAMA_URL, OLLAMA_MODEL
     language = initial_language()
@@ -268,7 +400,8 @@ def main():
     try:
         store = CommitmentStore(path)
         try:
-            run_repl(store, ollama_interpreter(OLLAMA_URL, OLLAMA_MODEL) if status.ready else None, language=language)
+            run_repl(store, ollama_interpreter(OLLAMA_URL, OLLAMA_MODEL) if status.ready else None,
+                     language=language, diagnostics=diagnostics)
         finally:
             store.close()
     except (OSError, sqlite3.Error):
