@@ -16,6 +16,12 @@ Known follow-ups remain open: [capture lifecycle #3](https://github.com/IFMLinar
 [acceptance #6](https://github.com/IFMLinares/viernes-pilot/issues/6).
 No automatic merge or defect closure is authorized by this publication.
 
+### Planner engine API
+
+`core.planner.Planner(store, interpreter=None)` prepares unsaved changes; only
+`respond("/confirm")` persists them. Tests inject an explicit synthetic store.
+Run `python -B -m unittest tests.test_commitments`. CLI wiring follows separately.
+
 ## Prerequisites
 
 - **Python**: Version 3.12 or higher.
