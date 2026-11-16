@@ -4,6 +4,18 @@
 
 Viernes Pilot es un asistente de desarrollo y orquestador de espacios de trabajo local y enfocado en la privacidad. Integra WSL con el sistema operativo Windows para automatizar la preparación de entornos de desarrollo, lanzar aplicaciones mediante búsqueda difusa (fuzzy-launch) y configurar pestañas interactivas de terminal.
 
+## Publicación experimental del planner
+
+El planner se publica mediante una cadena de integración en borrador, registrada
+en la [issue #7](https://github.com/IFMLinares/viernes-pilot/issues/7). Esta rama no
+es una versión estable. Runtime, almacenamiento y CLI llegan en unidades de
+revisión dependientes, con sus pruebas y documentación. Se excluyen binarios de voz/modelos.
+Quedan abiertos los pendientes de [captura #3](https://github.com/IFMLinares/viernes-pilot/issues/3),
+[extracción #4](https://github.com/IFMLinares/viernes-pilot/issues/4),
+[contratos de fechas #5](https://github.com/IFMLinares/viernes-pilot/issues/5) y
+[aceptación #6](https://github.com/IFMLinares/viernes-pilot/issues/6).
+Esta publicación no autoriza integración automática ni cierre de fallos.
+
 ## Requisitos Previos
 
 - **Python**: Versión 3.12 o superior.
