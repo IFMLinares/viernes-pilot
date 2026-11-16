@@ -16,6 +16,9 @@ Quedan abiertos los pendientes de [captura #3](https://github.com/IFMLinares/vie
 [aceptación #6](https://github.com/IFMLinares/viernes-pilot/issues/6).
 Esta publicación no autoriza integración automática ni cierre de fallos.
 
+Esta rama de archivo también contiene la candidata posterior; consulta
+[SNAPSHOT.md](SNAPSHOT.md) antes de usarla. No es una unidad de integración revisada.
+
 ### API del motor del planner
 
 `core.planner.Planner(store, interpreter=None)` prepara cambios sin guardar;

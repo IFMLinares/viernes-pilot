@@ -16,6 +16,9 @@ Known follow-ups remain open: [capture lifecycle #3](https://github.com/IFMLinar
 [acceptance #6](https://github.com/IFMLinares/viernes-pilot/issues/6).
 No automatic merge or defect closure is authorized by this publication.
 
+This archival branch also contains the later experimental candidate; read
+[SNAPSHOT.md](SNAPSHOT.md) before using it. It is not a reviewed integration unit.
+
 ### Planner engine API
 
 `core.planner.Planner(store, interpreter=None)` prepares unsaved changes; only
