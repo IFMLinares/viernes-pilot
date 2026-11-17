@@ -3,12 +3,14 @@ import ast
 import contextlib
 import io
 import json
+import os
 import sys
 import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
 from unittest.mock import Mock, patch
+from types import SimpleNamespace
 
 from core.commitments import CommitmentStore
 from core.diagnostics import ALLOWED_KEYS, Diagnostics
@@ -211,7 +213,12 @@ class MainFlagTests(unittest.TestCase):
         tree = ast.parse(path.read_text())
         entry = tree.body[-1]
         code = compile(ast.Module(body=[entry], type_ignores=[]), str(path), "exec")
+        temporary = tempfile.TemporaryDirectory(prefix="viernes-diagnostics-main-")
+        self.addCleanup(temporary.cleanup)
+        config = SimpleNamespace(OLLAMA_URL="http://127.0.0.1:11434", OLLAMA_MODEL="mock")
         with patch("sys.argv", ["main.py", "--planner", "--diagnostics"]), \
+             patch.dict(sys.modules, {"config": config}), \
+             patch.dict(os.environ, {"VIERNES_DB_PATH": str(Path(temporary.name) / "synthetic.sqlite3")}), \
              patch("sys.stderr", stderr), \
              patch("builtins.input", side_effect=["Show my university commitments", "/quit"]), \
              patch("core.planner.ensure_ollama", return_value=RuntimeStatus(False, "offline")):
