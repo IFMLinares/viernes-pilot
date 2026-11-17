@@ -169,7 +169,7 @@ class OracleRegressionTests(unittest.TestCase):
     @patch("core.planner.requests.post")
     def test_yearless_cases_require_clarification_not_invented_year(self, post):
         post.return_value.status_code = 200
-        post.return_value.json.return_value = {"message": {"content": '{"action":"clarify","language":"es","clarification":"date"}'}}
+        post.return_value.json.return_value = {"message": {"content": '{"action":"clarify","intent":"create","language":"es","clarification":"date"}'}}
         code = self.run_cli("--mode", "direct", "--max-requests", "60")
         self.assertEqual(code, 0)
         report = json.loads(Path(self.output).read_text())

@@ -25,6 +25,10 @@ Run `python -B -m unittest tests.test_commitments`. CLI wiring follows separatel
 The next review boundary adds `python main.py --planner`; see the
 [CLI foundation guide](docs/planner-cli/README.md) for scope and safety limits.
 
+For the complete experimental candidate, read [PLANNER.md](PLANNER.md) and the
+[isolated manual guide](docs/manual-testing/README.md). Earlier foundation guides
+describe their historical review boundaries; known defects #3–#6 remain open.
+
 ## Prerequisites
 
 - **Python**: Version 3.12 or higher.
