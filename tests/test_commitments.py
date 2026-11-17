@@ -67,11 +67,11 @@ class CommitmentTests(unittest.TestCase):
         def interpret(text, history):
             calls.append((text, list(history)))
             if len(calls) == 1:
-                return {"action": "clarify", "question": "Which month?"}
+                return {"action": "clarify", "clarification": "date"}
             return {"action": "create", "items": [{"title": "Exam", "area": "university",
                     "due_date": "2026-11-23"}]}
         planner = Planner(self.store, interpret)
-        self.assertIn("Which month", planner.respond("Parcial el 23"))
+        self.assertIn("fecha", planner.respond("Parcial el 23"))
         self.assertEqual(self.store.list(), [])
         planner.respond("November 2026")
         self.assertTrue(calls[1][1])
@@ -99,7 +99,7 @@ class CommitmentTests(unittest.TestCase):
         output = io.StringIO()
         with patch("builtins.input", side_effect=[
             '/new {"title":"Homework","area":"university"}', "/confirm", "/list", "/quit"]):
-            run_repl(self.store, interpreter=None, output=output)
+            run_repl(self.store, interpreter=None, output=output, language="en")
         self.assertIn("Homework", output.getvalue())
         self.assertIn("Saved", output.getvalue())
         self.assertEqual(len(self.store.list()), 1)
@@ -159,7 +159,7 @@ class CommitmentTests(unittest.TestCase):
         planner = Planner(self.store, ollama_interpreter("http://127.0.0.1:11434", "qwen3.5:9b"))
         with self.assertRaises(requests.Timeout):
             planner.respond("Add homework")
-        self.assertEqual(planner.respond("/list"), "[]")
+        self.assertIn("No commitments in the queried scope.", planner.respond("/list"))
         self.assertIsNone(planner.pending)
 
 

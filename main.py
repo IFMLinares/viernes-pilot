@@ -201,10 +201,17 @@ def main():
 
 if __name__ == "__main__":
     import argparse
+    from core.diagnostics import Diagnostics
     parser = argparse.ArgumentParser(description="Viernes local assistant")
     parser.add_argument("--planner", action="store_true", help="Run the text commitments planner (no voice or OS tools)")
+    parser.add_argument("--diagnostics", action="store_true",
+                        help="Emit planner diagnostic JSON lines to stderr (requires --planner)")
     args = parser.parse_args()
+    if args.diagnostics and not args.planner:
+        parser.error("--diagnostics requires --planner")
     if args.planner:
         from core.planner import main as planner_main
+        if args.diagnostics:
+            raise SystemExit(planner_main(diagnostics=Diagnostics()))
         raise SystemExit(planner_main())
     main()

@@ -1,6 +1,6 @@
 """Validated commitment records, independent of AI and user interfaces."""
 import sqlite3
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 AREAS = ("university", "work", "personal")
@@ -73,6 +73,38 @@ class CommitmentStore:
         if row is None:
             raise ValueError(f"Commitment {task_id} does not exist.")
         return dict(row)
+
+    def query(self, area=None, *, scope="current", start_date=None, end_date=None, today=None):
+        """Filter in SQLite, keeping the unbounded internal list API unchanged."""
+        if area is not None and area not in AREAS:
+            raise ValueError("Unknown area.")
+        if scope not in ("current", "all", "range"):
+            raise ValueError("Unknown query scope.")
+        if scope != "range" and (start_date is not None or end_date is not None):
+            raise ValueError("Explicit dates require range scope.")
+        clauses, params = [], []
+        if area is not None:
+            clauses.append("area = ?")
+            params.append(area)
+        if scope == "current":
+            start_date = ((today or date.today()) - timedelta(days=7)).isoformat()
+            clauses.append("(due_date >= ? OR (status = 'pending' AND (due_date < ? OR due_date IS NULL)))")
+            params.extend([start_date, start_date])
+        elif scope == "range":
+            if start_date is None or end_date is None:
+                raise ValueError("A range requires start_date and end_date.")
+            validate_fields({"due_date": start_date}, partial=True)
+            validate_fields({"due_date": end_date}, partial=True)
+            if start_date > end_date:
+                raise ValueError("Query start_date must not be after end_date.")
+            clauses.append("due_date >= ? AND due_date <= ?")
+            params.extend([start_date, end_date])
+        sql = "SELECT * FROM commitments"
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY status DESC, due_date IS NULL, due_date, id"
+        rows = [dict(row) for row in self.connection.execute(sql, params)]
+        return {"scope": scope, "area": area, "start_date": start_date, "end_date": end_date, "rows": rows}
 
     def create_many(self, items, source):
         if not isinstance(items, list) or not 1 <= len(items) <= 20:
