@@ -109,14 +109,15 @@ class PresentationTests(unittest.TestCase):
         response = post.return_value
         response.status_code = 200
         response.json.return_value = {"message": {"content":
-            '{"action":"clarify","language":"es","question":"¿Cuál es la fecha?"}'}}
+            '{"intent":"create","action":"clarify","language":"es","clarification":"date"}'}}
         from core.planner import ollama_interpreter
         planner = Planner(self.store, ollama_interpreter("http://localhost:11434", "qwen3.5:9b"))
-        self.assertEqual(planner.respond("Apúntame ese compromiso"), "¿Cuál es la fecha?")
+        self.assertIn("fecha", planner.respond("Apúntame ese compromiso"))
         payload = post.call_args.kwargs["json"]
         self.assertIn("language", payload["format"]["required"])
+        self.assertNotIn("question", payload["format"]["properties"])
         self.assertIn("latest user message", payload["messages"][0]["content"])
-        self.assertIn("Current conversation language", payload["messages"][1]["content"])
+        self.assertIn("Current conversation language", payload["messages"][0]["content"])
         self.assertIn("Comandos", planner.respond("/help"))
         self.assertIn("Cancelado", planner.respond("/cancel"))
         self.assertIn("No hay compromisos", planner.respond("/list"))
