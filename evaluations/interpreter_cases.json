@@ -1,0 +1,242 @@
+[
+  {
+    "case_id": "query-es-week-univ",
+    "category": "query",
+    "language": "es",
+    "input": "¿Qué tengo de la facultad esta semana?",
+    "fixtures": [],
+    "expected": {"action": "list", "language": "es", "area": "university", "scope": "range", "start_date": "2026-11-23", "end_date": "2026-11-29"}
+  },
+  {
+    "case_id": "query-es-all-work",
+    "category": "query",
+    "language": "es",
+    "input": "Muéstrame todos mis compromisos del trabajo",
+    "fixtures": [],
+    "expected": {"action": "list", "language": "es", "area": "work", "scope": "all"}
+  },
+  {
+    "case_id": "query-en-univ",
+    "category": "query",
+    "language": "en",
+    "input": "Show my university commitments",
+    "fixtures": [],
+    "expected": {"action": "list", "language": "en", "area": "university", "scope": "current"}
+  },
+  {
+    "case_id": "query-en-month",
+    "category": "query",
+    "language": "en",
+    "input": "Show my commitments this month",
+    "fixtures": [],
+    "expected": {"action": "list", "language": "en", "area": null, "scope": "range", "start_date": "2026-11-01", "end_date": "2026-11-30"}
+  },
+  {
+    "case_id": "query-es-typo",
+    "category": "typo",
+    "language": "es",
+    "input": "muestrame mis comprimisos del trabajo",
+    "fixtures": [],
+    "expected": {"action": "list", "language": "es", "area": "work", "scope": "current"}
+  },
+  {
+    "case_id": "query-es-default",
+    "category": "query",
+    "language": "es",
+    "input": "que compromisos tengo registrados?",
+    "fixtures": [],
+    "expected": {"action": "list", "language": "es", "area": null, "scope": "current"}
+  },
+  {
+    "case_id": "create-es-date",
+    "category": "proposal",
+    "language": "es",
+    "input": "Tengo que entregar física el 25 de noviembre de 2026",
+    "fixtures": [],
+    "expected": {"action": "create", "language": "es", "items": [{"area": "university", "due_date": "2026-11-25"}]}
+  },
+  {
+    "case_id": "create-en-date",
+    "category": "proposal",
+    "language": "en",
+    "input": "I need to submit the work report on November 25, 2026",
+    "fixtures": [],
+    "expected": {"action": "create", "language": "en", "items": [{"area": "work", "due_date": "2026-11-25"}]}
+  },
+  {
+    "case_id": "create-es-nodate",
+    "category": "proposal",
+    "language": "es",
+    "input": "Necesito comprar el regalo",
+    "fixtures": [],
+    "expected": {"action": "create", "language": "es", "items": [{"area": "personal"}]}
+  },
+  {
+    "case_id": "create-en-work",
+    "category": "proposal",
+    "language": "en",
+    "input": "Add API integration task for work project backend",
+    "fixtures": [],
+    "expected": {"action": "create", "language": "en", "items": [{"area": "work", "project": "backend"}]}
+  },
+  {
+    "case_id": "create-es-clarify-date",
+    "category": "clarify",
+    "language": "es",
+    "input": "Tengo parcial el 23",
+    "fixtures": [],
+    "expected": {"action": "clarify", "language": "es", "clarification": "date"}
+  },
+  {
+    "case_id": "complete-es-id",
+    "category": "complete",
+    "language": "es",
+    "input": "Marcar el compromiso 1 como completado",
+    "fixtures": [{"action": "create", "title": "Informe", "area": "university"}],
+    "expected": {"action": "complete", "language": "es", "id": 1}
+  },
+  {
+    "case_id": "edit-en-id",
+    "category": "edit",
+    "language": "en",
+    "input": "Edit commitment 1 to set due date to 2026-11-30",
+    "fixtures": [{"action": "create", "title": "Report", "area": "work"}],
+    "expected": {"action": "edit", "language": "en", "id": 1, "fields": {"due_date": "2026-11-30"}}
+  },
+  {
+    "case_id": "complete-es-noid",
+    "category": "clarify",
+    "language": "es",
+    "input": "Marcar como completado",
+    "fixtures": [],
+    "expected": {"action": "clarify", "language": "es", "clarification": "id"}
+  },
+  {
+    "case_id": "edit-en-noid",
+    "category": "clarify",
+    "language": "en",
+    "input": "Change the due date to next Monday",
+    "fixtures": [],
+    "expected": {"action": "clarify", "language": "en", "clarification": "id"}
+  },
+  {
+    "case_id": "reply-es-deriv",
+    "category": "reply",
+    "language": "es",
+    "input": "¿Qué es una derivada?",
+    "fixtures": [],
+    "expected": {"action": "reply", "language": "es"}
+  },
+  {
+    "case_id": "reply-en-exam",
+    "category": "reply",
+    "language": "en",
+    "input": "How can I prepare for an exam?",
+    "fixtures": [],
+    "expected": {"action": "reply", "language": "en"}
+  },
+  {
+    "case_id": "reply-es-advice",
+    "category": "reply",
+    "language": "es",
+    "input": "Dame un consejo para estudiar",
+    "fixtures": [],
+    "expected": {"action": "reply", "language": "es"}
+  },
+  {
+    "case_id": "clarify-es-area",
+    "category": "clarify",
+    "language": "es",
+    "input": "Tengo una entrega importante",
+    "fixtures": [],
+    "expected": {"action": "clarify", "language": "es", "clarification": "area"}
+  },
+  {
+    "case_id": "clarify-es-scope",
+    "category": "clarify",
+    "language": "es",
+    "input": "Muéstrame todo",
+    "fixtures": [],
+    "expected": {"action": "clarify", "language": "es", "clarification": "scope"}
+  },
+  {
+    "case_id": "clarify-en-request",
+    "category": "clarify",
+    "language": "en",
+    "input": "Show only completed commitments",
+    "fixtures": [],
+    "expected": {"action": "clarify", "language": "en", "clarification": "request"}
+  },
+  {
+    "case_id": "ambiguity-es-date",
+    "category": "clarify",
+    "language": "es",
+    "input": "Tengo parcial el 12",
+    "fixtures": [],
+    "expected": {"action": "clarify", "language": "es", "clarification": "date"}
+  },
+  {
+    "case_id": "paraphrase-es-create",
+    "category": "paraphrase",
+    "language": "es",
+    "input": "Debo entregar el informe de física el 25 de noviembre de 2026",
+    "fixtures": [],
+    "expected": {"action": "create", "language": "es", "items": [{"area": "university", "due_date": "2026-11-25"}]}
+  },
+  {
+    "case_id": "paraphrase-en-query",
+    "category": "paraphrase",
+    "language": "en",
+    "input": "What do I have registered for university?",
+    "fixtures": [],
+    "expected": {"action": "list", "language": "en", "area": "university", "scope": "current"}
+  },
+  {
+    "case_id": "typo-es-create",
+    "category": "typo",
+    "language": "es",
+    "input": "tengo k entregar fisica el 25 de noviembre de 2026",
+    "fixtures": [],
+    "expected": {"action": "create", "language": "es", "items": [{"area": "university", "due_date": "2026-11-25"}]}
+  },
+  {
+    "case_id": "typo-en-query",
+    "category": "typo",
+    "language": "en",
+    "input": "show my work commitmens",
+    "fixtures": [],
+    "expected": {"action": "list", "language": "en", "area": "work", "scope": "current"}
+  },
+  {
+    "case_id": "empty-query-es",
+    "category": "query",
+    "language": "es",
+    "input": "Muéstrame mis compromisos de trabajo",
+    "fixtures": [],
+    "expected": {"action": "list", "language": "es", "area": "work", "scope": "current"}
+  },
+  {
+    "case_id": "paraphrase-es-proposal",
+    "category": "paraphrase",
+    "language": "es",
+    "input": "Me falta entregar el trabajo de historia",
+    "fixtures": [],
+    "expected": {"action": "create", "language": "es", "items": [{"area": "university"}]}
+  },
+  {
+    "case_id": "clarify-es-id",
+    "category": "clarify",
+    "language": "es",
+    "input": "Editar la fecha",
+    "fixtures": [],
+    "expected": {"action": "clarify", "language": "es", "clarification": "id"}
+  },
+  {
+    "case_id": "query-en-typo-area",
+    "category": "typo",
+    "language": "en",
+    "input": "show my universitiy commitments",
+    "fixtures": [],
+    "expected": {"action": "list", "language": "en", "area": "university", "scope": "current"}
+  }
+]

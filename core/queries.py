@@ -4,6 +4,7 @@ import re
 import unicodedata
 from datetime import date, timedelta
 
+TASK_WORDS = {"compromisos", "tareas", "commitments", "tasks", "assignments"}
 WORDS = set((
     "muestrame mostrame muestra mostrar lista listar que cuales tengo registrados registradas hay "
     "mis los las de del la el universidad trabajo personal personales compromisos tareas "
@@ -25,8 +26,38 @@ def history_requested(value):
             and not tokens & {"not", "no", "without", "except", "sin", "excepto"})
 
 
-def listing_request(value, today=None):
+def _one_edit_apart(value, target):
+    """One insertion, deletion, substitution or adjacent transposition only."""
+    if abs(len(value) - len(target)) > 1:
+        return False
+    if len(value) == len(target):
+        differences = [index for index, (left, right) in enumerate(zip(value, target)) if left != right]
+        if len(differences) == 1:
+            return True
+        if len(differences) == 2:
+            first, second = differences
+            return (second == first + 1 and value[first] == target[second]
+                    and value[second] == target[first])
+        return False
+    short, long = (value, target) if len(value) < len(target) else (target, value)
+    return any(short == long[:index] + long[index + 1:] for index in range(len(long)))
+
+
+def _query_words(value):
     words = _words(value)
+    corrections = {}
+    for word in set(words) - WORDS:
+        matches = [target for target in TASK_WORDS if len(target) >= 8 and _one_edit_apart(word, target)]
+        if len(matches) != 1:
+            return None
+        corrections[word] = matches[0]
+    return [corrections.get(word, word) for word in words]
+
+
+def listing_request(value, today=None):
+    words = _query_words(value)
+    if not words:
+        return None
     if words[:2] == ["por", "favor"]:
         words = words[2:]
     elif words[:1] == ["please"]:
@@ -37,7 +68,7 @@ def listing_request(value, today=None):
     if not spanish and words[0] not in ("show", "list", "what", "which"):
         return None
     tokens = set(words)
-    if not tokens & {"compromisos", "tareas", "commitments", "tasks", "assignments"}:
+    if not tokens & TASK_WORDS:
         return None
     areas = [area for area, names in (("university", {"universidad", "university"}),
              ("work", {"trabajo", "work"}), ("personal", {"personal", "personales"})) if tokens & names]

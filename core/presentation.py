@@ -4,8 +4,8 @@ import re
 from datetime import date
 
 MESSAGES = {
-    "welcome": ("Viernes planner — /help for commands; /confirm applies a proposal.",
-                "Organizador Viernes — /help muestra comandos; /confirm aplica una propuesta."),
+    "welcome": ("Viernes — general questions and commitments; /help for commands; /confirm applies a proposal.",
+                "Viernes — preguntas generales y compromisos; /help muestra comandos; /confirm aplica una propuesta."),
     "prompt": ("you: ", "tú: "),
     "goodbye": ("Goodbye. Unconfirmed proposals were not saved.", "Hasta luego. Las propuestas sin confirmar no se guardaron."),
     "cancelled": ("Cancelled. No changes saved.", "Cancelado. No se guardaron cambios."),
@@ -27,6 +27,24 @@ MESSAGES = {
     "no_date": ("No deadline", "Sin fecha límite"), "empty": ("No commitments found.", "No hay compromisos."),
     "error": ("Could not process the request. Check the input; use /help or /cancel.",
               "No se pudo procesar la solicitud. Revisa los datos; usa /help o /cancel."),
+    "generation_limit": (
+        "Ollama reached its generation limit without returning an answer. No changes were saved. Offline commands are still available.",
+        "Ollama alcanzó su límite de generación sin devolver una respuesta. No se guardaron cambios. Los comandos sin IA siguen disponibles.",
+    ),
+    "clarification_conflict": (
+        "The area is already selected, but Ollama could not continue the request. No changes were saved. Complete the remaining details or use /cancel.",
+        "El área ya está seleccionada, pero Ollama no pudo continuar la solicitud. No se guardaron cambios. Completa los datos pendientes o usa /cancel.",
+    ),
+    "selected_area": ("Selected area", "Área seleccionada"),
+    "intent_conflict": (
+        "Ollama did not preserve the requested operation. No changes were saved. The pending capture is retained; use /cancel to start another request.",
+        "Ollama no mantuvo la operación solicitada. No se guardaron cambios. Se conserva la captura pendiente; usa /cancel para empezar otra solicitud.",
+    ),
+    "unsupported_operation": (
+        "That operation is not available. I can create, list, edit and complete commitments, but cannot delete records. No changes were made.",
+        "Esa operación no está disponible. Puedo registrar, consultar, editar y completar compromisos, pero no eliminar registros. No se modificaron datos.",
+    ),
+    "capture_pending": ("Capture in progress · Not saved yet", "Captura en curso · Todavía no guardada"),
     "network_error": ("Could not reach Ollama. Offline commands are still available.",
                       "No se pudo contactar a Ollama. Los comandos sin IA siguen disponibles."),
     "storage_error": ("Could not access commitment storage. Check the path and permissions.",
@@ -42,13 +60,21 @@ MESSAGES = {
     "undated": ("Pending without a deadline", "Pendientes sin fecha"),
     "empty_scope": ("No commitments in the queried scope.", "No hay compromisos en el alcance consultado."),
     "clarify_area": ("Which area: university, work or personal?", "¿De qué área: universidad, trabajo o personal?"),
-    "clarify_date": ("What is the complete date or date range, including the year?",
-                     "¿Cuál es la fecha o el período completo, incluido el año?"),
+    "clarify_date": ("Which date or date range do you mean? A missing year uses the current Caracas year.",
+                     "¿Qué fecha o período quieres usar? Si falta el año, se usa el año actual de Caracas."),
+    "date_conflict": ("These date references disagree: {dates}. Which date do you mean?",
+                      "Estas referencias no coinciden: {dates}. ¿Qué fecha quieres usar?"),
+    "tool_error": ("The date tool request could not be completed. No changes were saved; the pending capture is retained.",
+                   "No se pudo completar la solicitud a la herramienta de fechas. No se guardaron cambios; se conserva la captura pendiente."),
     "clarify_id": ("Which commitment ID? Use /list to find it.", "¿Cuál es el ID del compromiso? Usa /list para consultarlo."),
     "clarify_scope": ("Use the usual period, a date range, or explicitly request full history?",
                       "¿Quieres el período habitual, un rango de fechas o consultar explícitamente todo el historial?"),
     "clarify_request": ("Would you like to create, list, edit or complete a commitment?",
-                        "¿Quieres registrar, consultar, editar o completar un compromiso?"),
+                         "¿Quieres registrar, consultar, editar o completar un compromiso?"),
+    "clarify_create_request": ("What is the title or missing detail of the commitment you want to create?",
+                               "¿Cuál es el título o el detalle pendiente del compromiso que quieres registrar?"),
+    "general_reply": ("AI reply · General information (no commitment lookup)",
+                      "Respuesta de IA · Información general (sin consultar tus compromisos)"),
 }
 
 
@@ -83,13 +109,20 @@ def help_text(language):
         descriptions = ["Show pending and completed commitments.", "Propose changed fields; null removes a date.",
                         "Propose completion.", "Apply exactly the displayed proposal.",
                         "Discard proposal and clarification context.", "Show commands.", "Exit."]
-        end = "Describe commitments in English or Spanish; commands keep the last language.\nNo background reminders or automatic scheduling yet."
+        end = "Describe commitments or ask general questions in English or Spanish; commands keep the last language.\nGeneral answers are not verified personal-data results. No background reminders or automatic scheduling yet."
+        end += "\nAn empty generation-limit reply saves no changes; offline commands remain available."
+        end += "\nAnswer area clarifications with university, work or personal; /cancel clears the unfinished capture."
     else:
         intro = "Comandos (también disponibles sin IA):"
         descriptions = ["Mostrar compromisos pendientes y completados.", "Proponer cambios; null elimina una fecha.",
                         "Proponer completar un compromiso.", "Aplicar exactamente la propuesta mostrada.",
                         "Descartar propuesta y aclaraciones.", "Mostrar comandos.", "Salir."]
-        end = "Describe compromisos en español o inglés; los comandos conservan el último idioma.\nTodavía no hay recordatorios ni planificación automática."
+        end = "Describe compromisos o haz preguntas generales en español o inglés; los comandos conservan el último idioma.\nLas respuestas generales no son resultados verificados sobre tus datos. Todavía no hay recordatorios ni planificación automática."
+        end += "\nUna respuesta vacía por límite de generación no guarda cambios; los comandos sin IA siguen disponibles."
+        end += "\nResponde las aclaraciones de área con universidad, trabajo o personal; /cancel descarta la captura incompleta."
+    end += ("\nDates use America/Caracas; omitted years use the current year. The read-only resolve_date tool calculates relative dates."
+            if language == "en" else
+            "\nLas fechas usan America/Caracas; si falta el año se usa el actual. La herramienta de solo lectura resolve_date calcula fechas relativas.")
     commands = ["/list [university|work|personal] [--all]", '/edit ID {"due_date":"2026-11-24"}',
                 "/done ID", "/confirm", "/cancel", "/help", "/quit"]
     lines = [intro, '  /new {"title":"Report","area":"university","due_date":"2026-11-23"}']
@@ -135,6 +168,11 @@ def records(rows, language):
 def display_value(value):
     """Keep user/model fields on one line without terminal control sequences."""
     return "".join(char if char.isprintable() else f"\\u{ord(char):04x}" for char in value)
+
+
+def general_reply(answer, language):
+    body = "\n".join(display_value(line) for line in answer.strip().split("\n"))
+    return text("general_reply", language) + "\n" + body
 
 
 def query_records(result, language):

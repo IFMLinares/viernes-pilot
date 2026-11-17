@@ -1,3 +1,4 @@
+import io
 import tempfile
 import unittest
 from datetime import date
@@ -5,7 +6,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from core.commitments import CommitmentStore
-from core.planner import Planner
+from core.planner import Planner, run_repl
 
 
 class QueryTests(unittest.TestCase):
@@ -148,6 +149,41 @@ class QueryTests(unittest.TestCase):
             answer = planner.respond("Necesito revisar mis cosas")
         self.assertIn("historial", answer)
         self.assertIsNone(planner.pending)
+
+    def test_reported_typo_queries_empty_work_without_model_error_or_data_changes(self):
+        self.add("Informe de física", "2026-11-23")
+        before = self.path.read_bytes()
+        interpreter = Mock(side_effect=ValueError("Model fallback should not run"))
+        output = io.StringIO()
+        with patch("builtins.input", side_effect=["muestrame mis comprimisos del trabajo", "/quit"]):
+            run_repl(self.store, interpreter=interpreter, output=output, language="es")
+        answer = output.getvalue()
+        self.assertIn("Trabajo", answer)
+        self.assertIn("No hay compromisos en el alcance consultado.", answer)
+        self.assertNotIn("No se pudo procesar", answer)
+        self.assertNotIn("Informe de física", answer)
+        interpreter.assert_not_called()
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_single_edit_long_nouns_keep_scope_and_area(self):
+        from core.queries import listing_request
+        for noun in ("comprimisos", "compromsios", "compromios", "compromissos"):
+            with self.subTest(noun=noun):
+                result = listing_request(f"muestrame mis {noun} del trabajo esta semana", today=self.today)
+                self.assertEqual((result["area"], result["scope"], result["start_date"], result["end_date"]),
+                                 ("work", "range", "2026-11-23", "2026-11-29"))
+        result = listing_request("Show all my work commitmens.")
+        self.assertEqual((result["area"], result["scope"]), ("work", "all"))
+
+    def test_typo_tolerance_never_discards_other_unknown_words(self):
+        from core.queries import listing_request
+        for request in ("muestrame mis comprimisos del trabjo",
+                        "muestrame mis comprimisos del trabajo completados",
+                        "muestrame mis comprimisos del trabajo en 2025",
+                        "Show my work tanks", "Show al my work commitmens",
+                        "no muestrame mis comprimisos del trabajo"):
+            with self.subTest(request=request):
+                self.assertIsNone(listing_request(request))
 
 
 if __name__ == "__main__":
