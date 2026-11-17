@@ -1,0 +1,44 @@
+name: Bug report / Reporte de fallo
+description: Reproduce one observable failure and define its acceptance criteria. / Reproduce un fallo y define su aceptación.
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary / Resumen
+      description: Describe the user-visible problem in English and Spanish. / Describe el problema en inglés y español.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction / Reproducción
+      description: Include exact synthetic inputs, entrypoint and relevant context. Do not include private data or local paths. / Incluye entradas sintéticas y contexto, sin datos privados ni rutas locales.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Observed behavior / Comportamiento observado
+      description: Separate observed facts from suspected causes. / Separa los hechos de las causas sospechadas.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior / Comportamiento esperado
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria / Criterios de aceptación
+      description: Name the complete conversation or public-interface checks needed to close this issue. / Indica los recorridos completos necesarios para cerrar la issue.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and evidence limits / Alcance y límites de la evidencia
+      description: State exclusions, unknowns and whether evidence is mocked or live. / Indica exclusiones, incógnitas y si la evidencia es simulada o real.
