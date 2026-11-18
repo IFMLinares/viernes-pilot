@@ -4,6 +4,31 @@
 
 Viernes Pilot is a local, privacy-first developer assistant and workspace orchestrator. It integrates WSL with the Windows host to automate development environments, fuzzy-launch desktop applications, and orchestrate interactive terminal tabs.
 
+## Experimental planner publication
+
+The planner is being published through a draft integration chain tracked in
+[issue #7](https://github.com/IFMLinares/viernes-pilot/issues/7). This branch is not
+a stability release. Runtime, storage and CLI behavior arrive in dependent review
+units, with their tests and documentation. Voice/model binaries are excluded.
+Known follow-ups remain open: [capture lifecycle #3](https://github.com/IFMLinares/viernes-pilot/issues/3),
+[extraction #4](https://github.com/IFMLinares/viernes-pilot/issues/4),
+[date contracts #5](https://github.com/IFMLinares/viernes-pilot/issues/5) and
+[acceptance #6](https://github.com/IFMLinares/viernes-pilot/issues/6).
+No automatic merge or defect closure is authorized by this publication.
+
+### Planner engine API
+
+`core.planner.Planner(store, interpreter=None)` prepares unsaved changes; only
+`respond("/confirm")` persists them. Tests inject an explicit synthetic store.
+Run `python -B -m unittest tests.test_commitments`. CLI wiring follows separately.
+
+The next review boundary adds `python main.py --planner`; see the
+[CLI foundation guide](docs/planner-cli/README.md) for scope and safety limits.
+
+For the complete experimental candidate, read [PLANNER.md](PLANNER.md) and the
+[isolated manual guide](docs/manual-testing/README.md). Earlier foundation guides
+describe their historical review boundaries; known defects #3–#6 remain open.
+
 ## Prerequisites
 
 - **Python**: Version 3.12 or higher.
