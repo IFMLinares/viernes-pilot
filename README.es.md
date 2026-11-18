@@ -22,6 +22,13 @@ Esta publicación no autoriza integración automática ni cierre de fallos.
 solo `respond("/confirm")` los persiste. Las pruebas inyectan una base sintética.
 Ejecuta `python -B -m unittest tests.test_commitments`. El CLI llega por separado.
 
+La siguiente unidad agrega `python main.py --planner`; consulta la
+[guía del CLI](docs/planner-cli/README.es.md) y sus límites de alcance y seguridad.
+
+Para la candidata experimental completa, consulta [PLANNER.md](PLANNER.md) y la
+[guía manual aislada](docs/manual-testing/README.es.md). Las guías base describen
+sus cortes históricos; los fallos #3–#6 permanecen abiertos.
+
 ## Requisitos Previos
 
 - **Python**: Versión 3.12 o superior.
