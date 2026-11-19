@@ -66,3 +66,6 @@ El modo live requiere autorización separada y los argumentos explícitos
 Máximos: 60 POST y 900 segundos. Se detiene ante el primer error o fallo de
 aceptación y conserva un reporte parcial. Los ejemplos de presupuesto de la guía
 en inglés no autorizan ejecutarlos. Este PR solo ejecuta pruebas sin inferencia.
+Un destino o modelo live vacío o compuesto solo por espacios se rechaza antes
+de crear el contador, enviar o sobrescribir el reporte; no selecciona valores
+predeterminados.

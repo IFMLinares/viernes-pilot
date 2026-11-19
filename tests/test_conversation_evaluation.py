@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import requests
 
@@ -54,6 +54,31 @@ class ConversationEvaluationTests(unittest.TestCase):
                 self.assertEqual(self.run_cli("--mode", "live", *args), 2)
                 sender.assert_not_called()
         self.assertFalse(self.output.exists())
+
+    def test_explicit_empty_live_configuration_preserves_output_without_reservation(self):
+        # Independent verifier B1: empty shell variables must not become defaults.
+        cases = [{"case_id": "reply", "issues": [6], "turns": [
+            {"user": "Synthetic question", "expect": {"error": False, "rows_count": 0}}
+        ]}]
+        response = Mock(status_code=200)
+        response.json.return_value = {"message": {"content": json.dumps({
+            "action": "reply", "intent": "reply", "language": "es", "answer": "Synthetic answer"
+        })}}
+        for index, (flag, value) in enumerate([
+                ("--url", ""), ("--model", ""), ("--url", " "), ("--model", " ")]):
+            with self.subTest(flag=flag, value=value):
+                output = Path(self.temp.name) / f"empty-{index}.json"
+                output.write_bytes(b"KEEP")
+                args = ["--mode", "live", "--url", "http://127.0.0.1:11434",
+                        "--model", "synthetic", "--max-requests", "2", "--max-seconds", "5",
+                        "--request-timeout", "1", "--output", str(output)]
+                args[args.index(flag) + 1] = value
+                with patch.object(runner, "load_cases", return_value=cases), patch(
+                        "requests.post", return_value=response) as sender:
+                    self.assertEqual(runner.main(args), 2)
+                sender.assert_not_called()
+                self.assertEqual(output.read_bytes(), b"KEEP")
+                self.assertFalse(Path(str(output) + ".attempts.sqlite3").exists())
 
     def test_mocked_live_failure_stops_first_and_retains_partial_report(self):
         # Tests the live execution path, not live-model evidence.

@@ -75,7 +75,9 @@ path do not establish recorded or live model acceptance.
 
 Live runs require separate authorization and explicit `--mode live --url --model
 --max-requests --max-seconds --request-timeout --output`. Caps are at most 60 POSTs
-and 900 seconds. Example **configuration only, not authorization to execute**:
+and 900 seconds. Empty/whitespace-only live endpoints or model names are rejected
+before creating a ledger, sending, or overwriting a report; they never select
+defaults. Example **configuration only, not authorization to execute**:
 `--mode live --url http://127.0.0.1:11434 --model qwen3.5:9b --max-requests 12
 --max-seconds 120 --request-timeout 30 --output /tmp/viernes-approved-live.json`.
 Live stops on the first error or acceptance failure and preserves a partial

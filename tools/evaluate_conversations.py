@@ -131,8 +131,9 @@ def main(argv=None):
     try:
         if Path(args.output).resolve() in {Path(path).resolve() for path in (args.cases, args.replay) if path}:
             raise ValueError("Output must not overwrite corpus or replay input.")
-        if args.mode == "live" and any(value is None for value in (
-                args.url, args.model, args.max_requests, args.max_seconds, args.request_timeout)):
+        if args.mode == "live" and (any(value is None for value in (
+                args.url, args.model, args.max_requests, args.max_seconds, args.request_timeout))
+                or not args.url.strip() or not args.model.strip()):
             raise ValueError("Live requires explicit endpoint, model, request/time/timeout budgets.")
         maximum = 60 if args.max_requests is None else args.max_requests
         seconds = 900 if args.max_seconds is None else args.max_seconds
