@@ -14,9 +14,9 @@ Delivery: one PR to main; user accepted the over-400-line exception. Runner: Pyt
 
 ## Tasks
 
-- T1 [S3,S4,S6] inline — checked locally: durable evaluation-only HTTP accounting, caps/deadlines, legacy evaluator compatibility, tests/docs. Risk: item 2 (live execution guard and budget enforcement). Commit: `1d93a3d`; independent feature-end verification pending.
-- T2 [S2,S4,S5,S6] inline — checked locally: synthetic multi-turn corpus, observation/assertions, separate evidence modes, replay and baseline failure reports, tests/docs. Commit: `45a2299`; independent feature-end verification pending.
-- T3 [S1,S5,S7] inline + independent verification for item 2 — pending: offline suite and differential checks, scope review, one linked PR. Commit/PR: pending.
+- T1 [S3,S4,S6] inline — complete: durable evaluation-only HTTP accounting, caps/deadlines, legacy compatibility, tests/docs. Risk: item 2 (live execution guard and budget enforcement). Commit: `1d93a3d`; independent verification and B1 correction/recheck at `3858aa6` passed.
+- T2 [S2,S4,S5,S6] inline — complete: synthetic multi-turn corpus, observation/assertions, separate evidence modes, replay and baseline failure reports, tests/docs. Commit: `45a2299`; independently verified; no live model acceptance claimed.
+- T3 [S1,S5,S7] inline + independent verification for item 2 — complete: 231 offline tests, compatibility differential, scope/readback checks; PR [#28](https://github.com/IFMLinares/viernes-pilot/pull/28) to main. No merge or PR2.
 
 ## Log
 
@@ -68,3 +68,7 @@ L6 — T2 RED: `python -B -m unittest tests.test_conversation_evaluation` failed
 L7 — Offline applicable suite: `python -B -m unittest tests.test_evaluation_http tests.test_conversation_evaluation tests.test_interpreter_evaluation tests.test_offline_evaluation tests.test_commitment_store tests.test_ollama_runtime tests.test_planner_entrypoint tests.test_planner_queries tests.test_planner_conversation tests.test_planner_clarification tests.test_planner_diagnostics tests.test_planner_generation tests.test_planner_intent tests.test_planner_presentation tests.test_planner_tool_loop tests.test_planner_tools tests.test_planner_capture` passed 230 tests. Connectivity/audio/OS integration checks and live inference were not run. RDD remains disabled by clone-local preference; no review transaction was started. Independent guard/compatibility verification is still pending.
 
 L8 — Independent verification passed 108 focused tests and differential checks of all three legacy evaluator modes plus the rescoring sibling. Core/requirements bytes are unchanged. One blocker B1: explicit empty live endpoint/model silently selected defaults. Its committed regression observed RED (exit 0 instead of 2 for empty endpoint/model and whitespace model); the guard now rejects empty/whitespace configuration before reservation/send/output mutation. Three targeted guard/missing-budget/mocked-valid-path tests passed. One correction batch only; independent B1 recheck pending. Initial verifier launch produced no verdict due to usage limit; user said "continua" before the successful launch. No inference occurred.
+
+L9 — B1 recheck at `3858aa6`: three authorized tests passed independently; six empty/whitespace endpoint/model probes all rejected before HTTP or ledger creation and preserved existing report bytes. Parent final suite passed 231 tests and reran the same three targeted checks. All S1–S7 have scoped local/delivery evidence; actual inference remains unrun as required. RDD stayed disabled/unmanaged.
+
+L10 — Published and read back OPEN PR [#28](https://github.com/IFMLinares/viernes-pilot/pull/28), `test/issue-26-agent-baseline` to main, linked with `Refs #26` and existing `enhancement` label. Only nine evaluation/test/corpus/docs files are included. Main remained equal to origin/main at `899d840`; no core/dependency changes. The final diff exceeds the initial estimate; the approved single-PR size exception is disclosed, with no protected-label mutation. No issue closure, merge, inference, or PR2 is authorized or performed. Local RFC inputs remain untouched and excluded.
