@@ -10,6 +10,10 @@ MESSAGES = {
     "goodbye": ("Goodbye. Unconfirmed proposals were not saved.", "Hasta luego. Las propuestas sin confirmar no se guardaron."),
     "cancelled": ("Cancelled. No changes saved.", "Cancelado. No se guardaron cambios."),
     "no_proposal": ("No proposal to confirm.", "No hay una propuesta para confirmar."),
+    "missing_draft": (
+        "The previous draft was cancelled and is no longer available. Restate the full request to start a new draft. No changes were saved.",
+        "El borrador anterior fue cancelado y ya no está disponible. Vuelve a escribir la solicitud completa para iniciar otro borrador. No se guardaron cambios.",
+    ),
     "saved": ("Saved", "Guardado"),
     "pending": ("A proposal is pending. Use /confirm or /cancel before a new request.",
                 "Hay una propuesta pendiente. Usa /confirm o /cancel antes de otra solicitud."),
@@ -112,6 +116,7 @@ def help_text(language):
         end = "Describe commitments or ask general questions in English or Spanish; commands keep the last language.\nGeneral answers are not verified personal-data results. No background reminders or automatic scheduling yet."
         end += "\nAn empty generation-limit reply saves no changes; offline commands remain available."
         end += "\nAnswer area clarifications with university, work or personal; /cancel clears the unfinished capture."
+        end += "\nFor a single new commitment proposal, correct its area with 'the area is university, not personal'. Review it again before /confirm. Cancelled drafts cannot be restored."
     else:
         intro = "Comandos (también disponibles sin IA):"
         descriptions = ["Mostrar compromisos pendientes y completados.", "Proponer cambios; null elimina una fecha.",
@@ -120,6 +125,7 @@ def help_text(language):
         end = "Describe compromisos o haz preguntas generales en español o inglés; los comandos conservan el último idioma.\nLas respuestas generales no son resultados verificados sobre tus datos. Todavía no hay recordatorios ni planificación automática."
         end += "\nUna respuesta vacía por límite de generación no guarda cambios; los comandos sin IA siguen disponibles."
         end += "\nResponde las aclaraciones de área con universidad, trabajo o personal; /cancel descarta la captura incompleta."
+        end += "\nEn una propuesta de un solo compromiso nuevo, corrige el área con 'El área es para la universidad, no personal'. Revisa de nuevo antes de /confirm. Los borradores cancelados no se restauran."
     end += ("\nDates use America/Caracas; omitted years use the current year. The read-only resolve_date tool calculates relative dates."
             if language == "en" else
             "\nLas fechas usan America/Caracas; si falta el año se usa el actual. La herramienta de solo lectura resolve_date calcula fechas relativas.")

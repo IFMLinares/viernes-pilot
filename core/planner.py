@@ -226,6 +226,32 @@ def _area_answer(value):
              "work": "work", "personal": "personal"}.get(match[1]) if match else None)
 
 
+def _proposal_area(value, current):
+    """Recognize an explicit area assignment, not arbitrary mentions or new work."""
+    match = re.fullmatch(
+        r"(?:el [aá]rea (?:es |era )?(?:para (?:la |el )?)?|the area is )"
+        r"(universidad|university|trabajo|work|personal)"
+        r"(?:,? (?:no|not) (universidad|university|trabajo|work|personal))?[.!]?",
+        value, re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    area = _area_answer(match[1])
+    rejected = _area_answer(match[2]) if match[2] else None
+    if rejected is not None and (rejected != current or rejected == area):
+        return None
+    return area
+
+
+def _draft_reference(value):
+    """Only explicit backward draft references, not queries for previous periods."""
+    return re.search(
+        r"\b(?:el [aá]rea de la anterior (?:era|es)|(?:borrador|propuesta) "
+        r"(?:anterior|cancelad[oa])|(?:previous|cancelled|canceled) (?:draft|proposal))\b",
+        value, re.IGNORECASE,
+    ) is not None
+
+
 def _error_code(exc):
     if isinstance(exc, ToolError):
         return "tool_error"
@@ -505,6 +531,7 @@ class Planner:
         self._area_answer_accepted = False
         self.capture_intent = None
         self.capture_draft = {}
+        self._draft_cancelled = False
         # Bind every production closure, including disabled Planners, so a
         # factory's standalone sink cannot escape into another Planner's call.
         # Custom callbacks retain their existing two-argument interface.
@@ -521,6 +548,7 @@ class Planner:
         self._area_answer_accepted = False
         self.capture_intent = None
         self.capture_draft.clear()
+        self._draft_cancelled = False
 
     def _emit(self, **kwargs):
         self.diagnostics.emit(**kwargs)
@@ -713,7 +741,11 @@ class Planner:
                 return help_text(self.language)
             if text == "/cancel":
                 outcome = "cancel"
+                discarded = (self._draft_cancelled or self.pending is not None
+                             or self.capture_intent is not None or bool(self.history))
                 self.reset()
+                # Retain only the fact of cancellation, never the discarded data.
+                self._draft_cancelled = discarded
                 return ui_text("cancelled", self.language)
             if text == "/confirm":
                 if self.pending is None:
@@ -731,6 +763,16 @@ class Planner:
                 outcome = "confirm"
                 return ui_text("saved", self.language) + ":\n" + records(rows, self.language)
             if self.pending is not None and not (text == "/list" or text.startswith("/list ")):
+                if (self.pending["action"] == "create"
+                        and len(self.pending["items"]) == 1):
+                    item = self.pending["items"][0]
+                    area = _proposal_area(text, item["area"])
+                    if area is not None:
+                        revised = validate_fields({**item, "area": area})
+                        self.pending = {**self.pending, "items": [revised],
+                                        "source": self.pending["source"] + "\n" + text}
+                        outcome = "revise"
+                        return render_proposal(self.pending, self.language)
                 outcome = "pending_blocked"
                 return ui_text("pending", self.language)
             command, _, rest = text.partition(" ")
@@ -765,6 +807,9 @@ class Planner:
             elif text.startswith("/"):
                 raise ValueError("Unknown command. Use /help.")
             else:
+                if self._draft_cancelled and _draft_reference(text):
+                    outcome = "missing_draft"
+                    return ui_text("missing_draft", self.language)
                 try:
                     result, route = self._interpret_to_action(text)
                 except _InterpreterUnavailable:
@@ -810,6 +855,7 @@ class Planner:
                 result = {"action": "clarify", "clarification": "scope"}
                 action = "clarify"
             if action == "clarify":
+                self._draft_cancelled = False
                 reason = result.get("clarification", "request")
                 if reason not in ("area", "date", "id", "scope", "request"):
                     raise ValueError("Unsupported clarification reason.")
@@ -860,6 +906,7 @@ class Planner:
             else:
                 raise ValueError("Unsupported proposal action.")
             self.pending = change
+            self._draft_cancelled = False
             self.clarification_reason = None
             self.resolved_area = None
             self.capture_intent = None
