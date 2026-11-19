@@ -19,3 +19,17 @@ se restauran como autoridad. Las pruebas usan exclusivamente datos sintéticos.
 ```bash
 python -B -m unittest tests.test_agent_state
 ```
+
+`ToolSpec` exige efectos, alcance, esquemas y handler explícitos. `Policy` deniega
+por defecto y comprueba nombre/alcance; solo permite `read` y `prepare`. Ni una
+concesión de nombre permite `write` o `external`. No existe herramienta de confirmación.
+
+El subconjunto de esquemas admite tipos JSON, objetos cerrados, campos requeridos,
+arrays con límites, tamaños de texto, rangos numéricos y enum. Las restricciones no
+soportadas se rechazan, no se ignoran. No admite `$ref`, uniones ni regex. Se validan
+argumentos/resultados y se copian como JSON; los booleanos no son enteros.
+
+Los handlers son código confiable de la aplicación, no Python aislado en sandbox.
+No reciben estado ni permisos; no hay herramientas reales de dominio ni de sistema.
+Las trazas contienen códigos, tamaños y fingerprints, nunca argumentos/resultados
+o excepciones crudas. Los fingerprints no equivalen a anonimización.

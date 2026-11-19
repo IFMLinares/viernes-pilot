@@ -195,3 +195,18 @@ class TurnResult:
     answer: str = ""
     error: dict | None = None
     traces: list = field(default_factory=list)
+
+
+@dataclass
+class ExecutionContext:
+    """Host-created authority and accounting; intentionally has no JSON restore API."""
+    policy: object
+    budget: Budget
+    traces: list = field(default_factory=list)
+
+    def emit(self, event, **fields):
+        allowed = {"tool", "outcome", "code", "args_bytes", "args_sha256", "result_bytes",
+                   "result_sha256", "context_bytes"}
+        self.traces.append({"event": event, "requests": self.budget.requests,
+                            "iterations": self.budget.iterations, "tool_calls": self.budget.tool_calls,
+                            **{key: value for key, value in fields.items() if key in allowed}})

@@ -17,8 +17,8 @@ Delivery: one independent PR to main, size exception approved; offline unittest 
 
 ## Tasks
 
-- T1 [S2,S4,S9] inline — checked locally: JSON contracts/state and limits, six offline tests/docs. Schema validation belongs to T2's tool boundary. Risk: item 2 (safe state admission). Commit: first unit; final verification pending.
-- T2 [S2,S6,S7,S8,S9] inline — pending: explicit registration, deny-by-default policy, bounded executor, sanitized traces, tests/docs. Risk: item 2 (tool execution permissions). Commit: pending.
+- T1 [S2,S4,S9] inline — checked locally: JSON contracts/state and limits, six offline tests/docs. Schema validation belongs to T2's tool boundary. Risk: item 2 (safe state admission). Commit: `6d8e012`; final verification pending.
+- T2 [S2,S6,S7,S8,S9] inline — checked locally: explicit registration, deny-by-default policy, bounded executor, sanitized traces, seven tool tests/docs. Risk: item 2 (tool execution permissions). Commit: second unit; final verification pending.
 - T3 [S3,S5,S7,S8,S9] inline — pending: native Ollama adapter, bounded turn loop and timer reuse, tests/docs. Risk: items 2 and 3 (execution guards; compatibility of PR1 timer). Commit: pending.
 - T4 [S1,S8,S10] inline plus independent verifier — pending: full offline checks, scoped security verification, old planner/evaluator compatibility, publish one independent PR. No live inference or PR3.
 
@@ -82,3 +82,5 @@ L3 — GitHub PR28 verified MERGED; local main fast-forwarded to origin/main. Ne
 L4 — Route: inline because the units share contracts and are dependent; no parallel writer trigger. Runtime must not import PR1 Budget (SQLite/mock patching). Only its pure hard deadline mechanism may be shared, preserving old exception semantics with differential checks. Host handlers are trusted application code, not a sandbox. Terminal turn failure returns the input state; recoverable tool errors may continue within limits.
 
 L5 — T1 RED: `python -B -m unittest tests.test_agent_state` failed because the module did not exist. GREEN: six tests passed after implementation. State serialization includes explicit version admission and completed native-call ordering, and excludes system/grant fields; no persistence. The initial serializer omitted the init-disabled version field; round-trip tests caught it and explicit serialization fixed it. Schema validation remains at T2's tool boundary, avoiding a separate schema framework.
+
+L6 — T2 RED: `python -B -m unittest tests.test_agent_tools` failed on missing ExecutionContext/tools. GREEN: `python -B -m unittest tests.test_agent_tools tests.test_agent_state` passed 13 tests. Tools require explicit scope/effects, closed schemas and explicit policy grants; mixed write/external effects are never advertised or executed. Pure POSIX deadline utility added for handler bounds; PR1 timer delegation remains T3 work. Traces contain sizes/fingerprints, not secrets. No handler sandbox or live model behavior is claimed.

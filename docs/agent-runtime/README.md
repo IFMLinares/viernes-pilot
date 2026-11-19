@@ -24,3 +24,27 @@ python -B -m unittest tests.test_agent_state
 ```
 
 All fixtures are synthetic. No live-model behavior is claimed by these tests.
+
+## Tool boundary
+
+`ToolSpec` requires explicit effects and scope, input/result schemas and a trusted
+host handler. `Policy` defaults to empty grants; both name and scope must match.
+Only `read`/`prepare` effects can be advertised or executed. `write` and `external`
+are denied even when their names are granted. There is no confirmation tool.
+
+Schemas support `type`, `description`, `enum`, closed object properties/required,
+array items/minItems/maxItems, string minLength/maxLength, and numeric minimum/
+maximum. Supported types: object, array, string, integer, number, boolean, null.
+Unsupported types/keywords fail registration; no `$ref`, unions or regex are
+silently ignored. Booleans are not integers. Arguments/results are JSON-copied.
+
+Handlers receive only validated arguments, not state, grants or execution context.
+They are trusted application code, **not sandboxed Python**; falsely labeling a
+dangerous host function as read-only cannot be made safe by metadata. No built-in
+OS/external/domain handlers exist. Hard handler deadlines fail closed if unsupported.
+Trace events expose known tool names, outcome/error codes, sizes and fingerprints,
+never raw argument/result/exception text. Fingerprints are not anonymization.
+
+```bash
+python -B -m unittest tests.test_agent_state tests.test_agent_tools
+```
