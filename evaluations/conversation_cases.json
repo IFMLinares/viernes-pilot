@@ -1,0 +1,102 @@
+[
+  {
+    "case_id": "capture-and-confirm", "issues": [3, 6],
+    "turns": [
+      {
+        "user": "Tengo que entregar el informe del laboratorio de instrumentacion industrial el proximo sabado",
+        "responses": [
+          {"action": "tool", "intent": "create", "language": "es", "draft": {"title": "Informe"},
+           "tool": {"name": "resolve_date", "arguments": {"references": [{"kind": "weekday", "weekday": 6}]}}},
+          {"action": "clarify", "intent": "create", "language": "es", "clarification": "area"}
+        ],
+        "expect": {"pending": null, "draft.title": "Informe", "draft.due_date": "2026-11-28", "rows_count": 0, "tools": ["resolve_date"], "attempts": 2, "error": false},
+        "acceptance": {"pending": null, "draft.due_date": "2026-11-28", "capture_intent": "create", "rows_count": 0, "error": false}
+      },
+      {
+        "user": "universidad", "responses": [],
+        "expect": {"pending.items.0.area": "university", "pending.items.0.due_date": "2026-11-28", "rows_count": 0, "attempts": 0, "response_contains": "/confirm"},
+        "acceptance": {"pending.items.0.area": "university", "pending.items.0.due_date": "2026-11-28", "rows_count": 0, "error": false}
+      },
+      {
+        "user": "/confirm", "responses": [],
+        "expect": {"pending": null, "rows_count": 1, "rows.0.title": "Informe", "rows.0.area": "university", "rows.0.status": "pending", "rows.0.due_date": "2026-11-28", "attempts": 0},
+        "acceptance": {"pending": null, "rows_count": 1, "rows.0.area": "university", "rows.0.due_date": "2026-11-28", "error": false}
+      }
+    ]
+  },
+  {
+    "case_id": "pending-correction-and-cancel", "issues": [3, 4, 6],
+    "turns": [
+      {
+        "user": "Tenemos que entregar el informe del laboratorio de instrumentacion industrial para el proximo sabado (online)",
+        "responses": [{"action": "create", "intent": "create", "language": "es", "items": [{"title": "Informe", "area": "personal", "due_date": "2026-11-28"}]}],
+        "expect": {"pending.items.0.title": "Informe", "pending.items.0.area": "personal", "rows_count": 0, "source_contains": "(online)", "attempts": 1},
+        "acceptance": {"response_contains": "(online)"}
+      },
+      {
+        "user": "El area es para la universidad, no personal", "responses": [],
+        "expect": {"pending.items.0.area": "personal", "rows_count": 0, "attempts": 0, "response_contains": "/confirm"},
+        "acceptance": {"pending.items.0.area": "university"}
+      },
+      {"user": "/cancel", "responses": [], "expect": {"pending": null, "rows_count": 0, "attempts": 0}}
+    ]
+  },
+  {
+    "case_id": "cancelled-reference", "issues": [3, 6],
+    "turns": [
+      {
+        "user": "Prepara un informe personal",
+        "responses": [{"action": "create", "intent": "create", "language": "es", "items": [{"title": "Informe", "area": "personal"}]}],
+        "expect": {"pending.items.0.area": "personal", "rows_count": 0, "attempts": 1}
+      },
+      {"user": "/cancel", "responses": [], "expect": {"pending": null, "draft": {}, "rows_count": 0, "attempts": 0}},
+      {
+        "user": "el area de la anterior era para la universidad",
+        "responses": [{"action": "clarify", "intent": "unsupported", "language": "es", "clarification": "request"}],
+        "expect": {"pending": null, "rows_count": 0, "attempts": 1, "error": false},
+        "acceptance": {"response_contains": "borrador"}
+      }
+    ]
+  },
+  {
+    "case_id": "date-tool-metadata", "issues": [5, 6],
+    "turns": [
+      {
+        "user": "Informe para dentro de tres dias",
+        "responses": [{"action": "tool", "intent": "create", "language": "es", "tool": {"name": "resolve_date", "arguments": {"references": [{"kind": "relative_days", "days": 3}]}}}],
+        "expect": {"pending": null, "rows_count": 0, "storage_changed": false, "attempts": 1, "tools": [], "error": true},
+        "acceptance": {"error": false}
+      },
+      {"user": "/cancel", "responses": [], "expect": {"pending": null, "rows_count": 0, "attempts": 0, "error": false}}
+    ]
+  },
+  {
+    "case_id": "date-continuation", "issues": [5, 6],
+    "turns": [
+      {
+        "user": "Informe universidad para dentro de tres dias",
+        "responses": [
+          {"action": "tool", "intent": "create", "language": "es", "draft": {"title": "Informe"},
+           "tool": {"name": "resolve_date", "arguments": {"references": [{"kind": "relative_days", "days": 3}]}}},
+          {"action": "reply", "intent": "create", "language": "es", "answer": "He guardado el informe."}
+        ],
+        "expect": {"pending": null, "rows_count": 0, "storage_changed": false, "attempts": 2, "tools": ["resolve_date"], "error": true},
+        "acceptance": {"error": false}
+      },
+      {"user": "/cancel", "responses": [], "expect": {"pending": null, "rows_count": 0, "attempts": 0, "error": false}}
+    ]
+  },
+  {
+    "case_id": "query-complete-confirm", "issues": [6],
+    "fixtures": [{"title": "Informe sintetico", "area": "university", "due_date": "2026-11-28"}],
+    "turns": [
+      {"user": "/list", "responses": [], "expect": {"rows_count": 1, "attempts": 0, "response_contains": "Informe sintetico", "storage_changed": false}},
+      {
+        "user": "Completa el pendiente 1",
+        "responses": [{"action": "complete", "intent": "complete", "language": "es", "id": 1}],
+        "expect": {"pending.action": "complete", "rows.0.status": "pending", "attempts": 1, "storage_changed": false}
+      },
+      {"user": "/confirm", "responses": [], "expect": {"pending": null, "rows.0.status": "completed", "rows_count": 1, "storage_changed": true, "attempts": 0}}
+    ]
+  }
+]

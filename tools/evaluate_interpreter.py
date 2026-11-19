@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import os
+import sqlite3
 import sys
 import tempfile
 import time
@@ -626,7 +627,7 @@ def main(argv=None):
         budget = Budget(args.max_requests, time.monotonic() + args.max_seconds,
                         ledger=args.output + ".attempts.sqlite3", request_timeout=args.request_timeout,
                         binding=json.dumps([url, args.model, args.mode]))
-    except (ValueError, OSError) as exc:
+    except (ValueError, OSError, sqlite3.Error) as exc:
         print(type(exc).__name__ + ": invalid evaluation budget or ledger", file=sys.stderr)
         return 2
     direct_results = [] if args.mode in ("direct", "both") else None

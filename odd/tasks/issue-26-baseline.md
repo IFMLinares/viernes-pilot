@@ -14,8 +14,8 @@ Delivery: one PR to main; user accepted the over-400-line exception. Runner: Pyt
 
 ## Tasks
 
-- T1 [S3,S4,S6] inline — checked locally: durable evaluation-only HTTP accounting, caps/deadlines, legacy evaluator compatibility, tests/docs. Risk: item 2 (live execution guard and budget enforcement). Commit: first work unit; independent feature-end verification pending.
-- T2 [S2,S4,S5,S6] inline — pending: synthetic multi-turn corpus, observation/assertions, separate evidence modes, replay and baseline failure reports, tests/docs. Commit: pending.
+- T1 [S3,S4,S6] inline — checked locally: durable evaluation-only HTTP accounting, caps/deadlines, legacy evaluator compatibility, tests/docs. Risk: item 2 (live execution guard and budget enforcement). Commit: `1d93a3d`; independent feature-end verification pending.
+- T2 [S2,S4,S5,S6] inline — checked locally: synthetic multi-turn corpus, observation/assertions, separate evidence modes, replay and baseline failure reports, tests/docs. Commit: second work unit; independent feature-end verification pending.
 - T3 [S1,S5,S7] inline + independent verification for item 2 — pending: offline suite and differential checks, scope review, one linked PR. Commit/PR: pending.
 
 ## Log
@@ -62,3 +62,7 @@ L3 — Exploration: legacy evaluator counts interpreter invocations, while `core
 L4 — Route: parent writes inline; no independent parallel writer units or context-backstop trigger. Separate read-only explorer supplied a routing map. Expected files: evaluation tools, synthetic corpus, tests, evaluation docs, this logbook. Temporary state remains outside the workspace. Synthetic transport failures model error classes, not proof of the original live model's root cause.
 
 L5 — T1 RED: `python -B -m unittest tests.test_evaluation_http` failed on the missing transport module. GREEN: `python -B -m unittest tests.test_evaluation_http tests.test_interpreter_evaluation` passed 34 tests. First combined check found legacy zero-request reporting incompatible with rejecting zero; retained its no-send partial report. Seven new tests cover durable count-before-send, reopen, retries/continuations, hard timeout and budget binding. No inference. SQLite holds only evaluation accounting, not production sessions.
+
+L6 — T2 RED: `python -B -m unittest tests.test_conversation_evaluation` failed on the missing runner. GREEN: the new conversation/HTTP tests passed 17 tests. Six conversations, 16 turns, nine simulated POSTs and zero actual HTTP requests reproduce host behavior; acceptance remains false intentionally. The two date-wire injections are not asserted as the original live failure's root cause. Replay provenance is caller-declared; no real recordings are shipped. An initially assumed natural-query fast path required a model response; the query/complete scenario uses explicit `/list` to isolate confirmed store behavior instead of inventing model output.
+
+L7 — Offline applicable suite: `python -B -m unittest tests.test_evaluation_http tests.test_conversation_evaluation tests.test_interpreter_evaluation tests.test_offline_evaluation tests.test_commitment_store tests.test_ollama_runtime tests.test_planner_entrypoint tests.test_planner_queries tests.test_planner_conversation tests.test_planner_clarification tests.test_planner_diagnostics tests.test_planner_generation tests.test_planner_intent tests.test_planner_presentation tests.test_planner_tool_loop tests.test_planner_tools tests.test_planner_capture` passed 230 tests. Connectivity/audio/OS integration checks and live inference were not run. RDD remains disabled by clone-local preference; no review transaction was started. Independent guard/compatibility verification is still pending.

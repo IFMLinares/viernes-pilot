@@ -1,5 +1,6 @@
 """Single-process evaluation transport budgets; never installed in the application."""
 from contextlib import contextmanager
+import json
 import math
 from pathlib import Path
 import signal
@@ -25,6 +26,7 @@ class Budget:
         self.request_timeout = request_timeout
         self._requests, self.connection = 0, None
         if ledger is not None:
+            binding = json.dumps([binding, request_timeout])
             Path(ledger).parent.mkdir(parents=True, exist_ok=True)
             self.connection = sqlite3.connect(ledger, timeout=0.1)
             try:
