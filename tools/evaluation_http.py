@@ -3,13 +3,13 @@ from contextlib import contextmanager
 import json
 import math
 from pathlib import Path
-import signal
 import sqlite3
-import threading
 import time
 from unittest.mock import patch
 
 import requests
+
+from core.deadlines import deadline
 
 
 class BudgetExceeded(RuntimeError):
@@ -109,20 +109,6 @@ def hard_timeout(seconds, reason):
 
     Fail closed on unsupported hosts/threads rather than claiming a hard bound.
     """
-    if (not hasattr(signal, "setitimer") or threading.current_thread() is not threading.main_thread()
-            or signal.getitimer(signal.ITIMER_REAL)[0]):
-        raise RuntimeError("Hard evaluation deadline unavailable.")
-    if seconds <= 0:
-        raise BudgetExceeded("deadline")
-    previous = signal.getsignal(signal.SIGALRM)
-
-    def expired(*_):
-        raise BudgetExceeded(reason)
-
-    signal.signal(signal.SIGALRM, expired)
-    signal.setitimer(signal.ITIMER_REAL, seconds)
-    try:
+    with deadline(seconds, lambda: BudgetExceeded("deadline" if seconds <= 0 else reason),
+                  lambda: RuntimeError("Hard evaluation deadline unavailable.")):
         yield
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, previous)

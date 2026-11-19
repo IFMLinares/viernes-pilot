@@ -48,3 +48,39 @@ never raw argument/result/exception text. Fingerprints are not anonymization.
 ```bash
 python -B -m unittest tests.test_agent_state tests.test_agent_tools
 ```
+
+## Native model boundary and turns
+
+`Runtime(adapter, executor, policy, limits).handle_turn(input, state, context=None)`
+creates a fresh process-local budget by default. An optional host-created
+`ExecutionContext` must carry this runtime's policy and matching limits; state
+JSON cannot create one. Generic `state.data` is preserved but never promoted to
+system instructions or policy. System instructions belong to runtime configuration.
+
+`OllamaModelAdapter(url, model)` requires an explicit loopback endpoint and model.
+It sends `/api/chat` with native `tools`, `stream=false` and `think=false`; there
+is no action-classification JSON schema. HTTP response reading is streamed only
+to enforce the response-byte cap, not to publish partial model tokens. Every POST
+is reserved before sending. Redirects/proxies/retries are disabled/not added.
+The API uses `assistant.tool_calls` followed by `role=tool`, `tool_name` and a
+JSON `ok/data/error/meta` result. Multiple calls execute in order, never in parallel.
+
+Unknown tools, invalid arguments/results and ordinary handler failures can return
+recoverable errors to the model. Permission denial, exhausted budgets, unavailable
+deadlines and incomplete/malformed model responses terminate the turn. A model
+timeout/connection error is returned to the caller, not automatically retried.
+Only successful completed turns advance the revision; terminal failures return
+the input state without a queued call. This does not undo a falsely labeled
+handler's external side effect: register only trusted pure read/preparation code.
+
+`TurnResult.answer` is model text, not proof of a committed operation. No write,
+confirmation, saved-record result, or persistence capability exists in PR2.
+The pure POSIX timer is shared with PR1 through its unchanged `hard_timeout`
+interface; runtime does not import evaluation modules or SQLite.
+
+```bash
+python -B -m unittest tests.test_agent_state tests.test_agent_tools tests.test_agent_runtime
+```
+
+These tests use synthetic native envelopes and forbid real network requests.
+Local model capability/quality remains unverified: no live probe was authorized.

@@ -18,8 +18,8 @@ Delivery: one independent PR to main, size exception approved; offline unittest 
 ## Tasks
 
 - T1 [S2,S4,S9] inline — checked locally: JSON contracts/state and limits, six offline tests/docs. Schema validation belongs to T2's tool boundary. Risk: item 2 (safe state admission). Commit: `6d8e012`; final verification pending.
-- T2 [S2,S6,S7,S8,S9] inline — checked locally: explicit registration, deny-by-default policy, bounded executor, sanitized traces, seven tool tests/docs. Risk: item 2 (tool execution permissions). Commit: second unit; final verification pending.
-- T3 [S3,S5,S7,S8,S9] inline — pending: native Ollama adapter, bounded turn loop and timer reuse, tests/docs. Risk: items 2 and 3 (execution guards; compatibility of PR1 timer). Commit: pending.
+- T2 [S2,S6,S7,S8,S9] inline — checked locally: explicit registration, deny-by-default policy, bounded executor, sanitized traces, seven tool tests/docs. Risk: item 2 (tool execution permissions). Commit: `f642027`; final verification pending.
+- T3 [S3,S5,S7,S8,S9] inline — checked locally: native Ollama adapter, bounded turn loop and timer reuse, 12 native-protocol tests/docs. Risk: items 2 and 3 (execution guards; compatibility of PR1 timer). Commit: third unit; independent verification pending.
 - T4 [S1,S8,S10] inline plus independent verifier — pending: full offline checks, scoped security verification, old planner/evaluator compatibility, publish one independent PR. No live inference or PR3.
 
 ## Log
@@ -84,3 +84,5 @@ L4 — Route: inline because the units share contracts and are dependent; no par
 L5 — T1 RED: `python -B -m unittest tests.test_agent_state` failed because the module did not exist. GREEN: six tests passed after implementation. State serialization includes explicit version admission and completed native-call ordering, and excludes system/grant fields; no persistence. The initial serializer omitted the init-disabled version field; round-trip tests caught it and explicit serialization fixed it. Schema validation remains at T2's tool boundary, avoiding a separate schema framework.
 
 L6 — T2 RED: `python -B -m unittest tests.test_agent_tools` failed on missing ExecutionContext/tools. GREEN: `python -B -m unittest tests.test_agent_tools tests.test_agent_state` passed 13 tests. Tools require explicit scope/effects, closed schemas and explicit policy grants; mixed write/external effects are never advertised or executed. Pure POSIX deadline utility added for handler bounds; PR1 timer delegation remains T3 work. Traces contain sizes/fingerprints, not secrets. No handler sandbox or live model behavior is claimed.
+
+L7 — T3 RED: `python -B -m unittest tests.test_agent_runtime` failed on missing native adapter/runtime. GREEN: 12 native-protocol tests, 25 agent tests total. Adapter reads bounded non-streaming API envelopes through streamed HTTP chunks, counts reservations, and rejects partial generations. Runtime handles ordered calls and recoverable errors; terminal failure preserves input state. PR1 hard_timeout now delegates to the same pure timer with its original exception/message semantics. Full applicable offline suite (the prior PR1 17-module command plus tests.test_agent_state/tests.test_agent_tools/tests.test_agent_runtime) passed 256 tests. No network/model service was used. Independent verification remains pending.
