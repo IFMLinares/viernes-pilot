@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import os
+import sqlite3
 import sys
 import tempfile
 import time
@@ -24,11 +25,7 @@ from core.commitments import AREAS, CommitmentStore, validate_fields
 from core.diagnostics import Diagnostics
 from core.ollama_runtime import local_url
 from core.planner import Planner, ollama_interpreter
-
-
-class BudgetExceeded(RuntimeError):
-    """Raised when the shared request/time budget is exhausted."""
-    pass
+from tools.evaluation_http import Budget, BudgetExceeded
 
 
 REFERENCE_DATE = date(2026, 11, 23)
@@ -343,22 +340,6 @@ def classify_http_error(code):
     return "service_error"
 
 
-class Budget:
-    def __init__(self, max_requests, deadline):
-        self.max_requests = max_requests
-        self.deadline = deadline
-        self.requests = 0
-
-    def check(self):
-        if self.requests >= self.max_requests:
-            raise BudgetExceeded("max_requests")
-        if time.monotonic() >= self.deadline:
-            raise BudgetExceeded("deadline")
-
-    def remaining_seconds(self):
-        return max(0, self.deadline - time.monotonic())
-
-
 class BudgetedInterpreter:
     """Central wrapper: counts attempts before the call, enforces budget/timeout, classifies errors."""
 
@@ -373,10 +354,10 @@ class BudgetedInterpreter:
 
     def call(self, text, history):
         self.budget.check()
-        self.budget.requests += 1
         try:
             interpreter = ollama_interpreter(self.url, self.model, today=REFERENCE_DATE, timeout=self._timeout())
-            return interpreter(text, history)
+            with self.budget.transport():
+                return interpreter(text, history)
         except ValueError as exc:
             message = str(exc)
             code = _extract_http_code(message)
@@ -392,8 +373,9 @@ class BudgetedInterpreter:
 
 
 def evaluate_direct(case, interpreter):
-    """Run a single case through the production interpreter (one attempt always consumed)."""
+    """Run a single case and count actual HTTP attempts, not interpreter calls."""
     start = time.perf_counter()
+    before_requests = interpreter.budget.requests
     try:
         actual = interpreter.call(case["input"], [])
         validate_action_contract(actual)
@@ -404,7 +386,7 @@ def evaluate_direct(case, interpreter):
             "route": "interpreter",
             "verdict": "correct" if actions_equal(actual, case["expected"]) else "incorrect",
             "reason_code": None,
-            "requests": 1,
+            "requests": interpreter.budget.requests - before_requests,
             "elapsed_ms": elapsed_ms,
         }
     except RuntimeError as exc:
@@ -418,7 +400,7 @@ def evaluate_direct(case, interpreter):
             "route": "interpreter",
             "verdict": "error",
             "reason_code": reason,
-            "requests": 1,
+            "requests": interpreter.budget.requests - before_requests,
             "elapsed_ms": elapsed_ms,
             "stop": reason in ("infrastructure", "connection", "timeout", "network", "service_error", "max_requests", "deadline"),
         }
@@ -430,7 +412,7 @@ def evaluate_direct(case, interpreter):
             "route": "interpreter",
             "verdict": "error",
             "reason_code": "invalid_json",
-            "requests": 1,
+            "requests": interpreter.budget.requests - before_requests,
             "elapsed_ms": elapsed_ms,
         }
     except Exception as exc:
@@ -441,7 +423,7 @@ def evaluate_direct(case, interpreter):
             "route": "interpreter",
             "verdict": "error",
             "reason_code": _error_code_from_exception(exc),
-            "requests": 1,
+            "requests": interpreter.budget.requests - before_requests,
             "elapsed_ms": elapsed_ms,
         }
 
@@ -468,6 +450,7 @@ def _error_code_from_exception(exc):
 def evaluate_end_to_end(case, interpreter):
     """Run a single case through Planner.respond with isolated fixtures and DB-state checks."""
     start = time.perf_counter()
+    before_requests = interpreter.budget.requests
     events = []
     diag = Diagnostics(output=type("Sink", (), {"write": lambda _, s: events.append(json.loads(s)), "flush": lambda _: None})())
     temp = tempfile.TemporaryDirectory(prefix="viernes-eval-")
@@ -492,7 +475,7 @@ def evaluate_end_to_end(case, interpreter):
                     "route": route,
                     "verdict": "error",
                     "reason_code": "storage_changed",
-                    "requests": 1 if route == "interpreter" else 0,
+                    "requests": interpreter.budget.requests - before_requests,
                     "elapsed_ms": elapsed_ms,
                 }
             return {
@@ -501,7 +484,7 @@ def evaluate_end_to_end(case, interpreter):
                 "route": route,
                 "verdict": "correct" if actions_equal(actual, case["expected"]) else "incorrect",
                 "reason_code": None,
-                "requests": 1 if route == "interpreter" else 0,
+                "requests": interpreter.budget.requests - before_requests,
                 "elapsed_ms": elapsed_ms,
             }
         finally:
@@ -517,7 +500,7 @@ def evaluate_end_to_end(case, interpreter):
             "route": "interpreter",
             "verdict": "error",
             "reason_code": reason,
-            "requests": 1,
+            "requests": interpreter.budget.requests - before_requests,
             "elapsed_ms": elapsed_ms,
             "stop": reason in ("infrastructure", "connection", "timeout", "network", "service_error", "max_requests", "deadline"),
         }
@@ -529,7 +512,7 @@ def evaluate_end_to_end(case, interpreter):
             "route": "interpreter",
             "verdict": "error",
             "reason_code": "invalid_json",
-            "requests": 1,
+            "requests": interpreter.budget.requests - before_requests,
             "elapsed_ms": elapsed_ms,
         }
     except Exception as exc:
@@ -540,7 +523,7 @@ def evaluate_end_to_end(case, interpreter):
             "route": "interpreter",
             "verdict": "error",
             "reason_code": _error_code_from_exception(exc),
-            "requests": 1,
+            "requests": interpreter.budget.requests - before_requests,
             "elapsed_ms": elapsed_ms,
         }
     finally:
@@ -613,6 +596,8 @@ def parse_args(argv=None):
                         help="Global hard cap on inference attempts (<=60)")
     parser.add_argument("--max-seconds", type=int, default=DEFAULT_MAX_SECONDS,
                         help="Deadline for the whole evaluation (<=900)")
+    parser.add_argument("--request-timeout", type=float, default=90,
+                        help="Hard wall-time bound per HTTP attempt (default 90 seconds)")
     parser.add_argument("--cases", default="evaluations/interpreter_cases.json",
                         help="Path to the synthetic case corpus")
     parser.add_argument("--output", required=True, help="Sanitized JSON report path")
@@ -638,7 +623,13 @@ def main(argv=None):
         print("No cases loaded.", file=sys.stderr)
         return 2
 
-    budget = Budget(args.max_requests, time.monotonic() + args.max_seconds)
+    try:
+        budget = Budget(args.max_requests, time.monotonic() + args.max_seconds,
+                        ledger=args.output + ".attempts.sqlite3", request_timeout=args.request_timeout,
+                        binding=json.dumps([url, args.model, args.mode]))
+    except (ValueError, OSError, sqlite3.Error) as exc:
+        print(type(exc).__name__ + ": invalid evaluation budget or ledger", file=sys.stderr)
+        return 2
     direct_results = [] if args.mode in ("direct", "both") else None
     e2e_results = [] if args.mode in ("end-to-end", "both") else None
     completed = False
@@ -668,6 +659,8 @@ def main(argv=None):
         stopped_reason = f"unexpected: {type(exc).__name__}"
 
     report = build_report(args, cases, direct_results, e2e_results, completed, stopped_reason)
+    report["http_attempts"] = budget.requests
+    budget.close()
     write_report(report, args.output)
     print(f"Report written to {args.output}", file=sys.stderr)
     return 0 if completed else 1
