@@ -57,3 +57,7 @@ python -B -m unittest tests.test_agent_state tests.test_agent_tools tests.test_a
 ```
 
 Pruebas exclusivamente sintéticas sin red; no se verificó calidad del modelo real.
+
+Las sondas independientes se conservan como regresiones offline, no como evidencia
+de modelo real: `python -B -m unittest tests.test_agent_independent`. Verifican flujo
+nativo, estado sin cambios ante rechazo, políticas, esquemas, límites y lectura HTTP acotada.

@@ -17,10 +17,10 @@ Delivery: one independent PR to main, size exception approved; offline unittest 
 
 ## Tasks
 
-- T1 [S2,S4,S9] inline — checked locally: JSON contracts/state and limits, six offline tests/docs. Schema validation belongs to T2's tool boundary. Risk: item 2 (safe state admission). Commit: `6d8e012`; final verification pending.
-- T2 [S2,S6,S7,S8,S9] inline — checked locally: explicit registration, deny-by-default policy, bounded executor, sanitized traces, seven tool tests/docs. Risk: item 2 (tool execution permissions). Commit: `f642027`; final verification pending.
-- T3 [S3,S5,S7,S8,S9] inline — checked locally: native Ollama adapter, bounded turn loop and timer reuse, 12 native-protocol tests/docs. Risk: items 2 and 3 (execution guards; compatibility of PR1 timer). Commit: third unit; independent verification pending.
-- T4 [S1,S8,S10] inline plus independent verifier — pending: full offline checks, scoped security verification, old planner/evaluator compatibility, publish one independent PR. No live inference or PR3.
+- T1 [S2,S4,S9] inline — verified: JSON contracts/state and limits, six offline tests/docs. Schema validation belongs to T2's tool boundary. Risk: item 2 (safe state admission). Commit: `6d8e012`; independent verification passed.
+- T2 [S2,S6,S7,S8,S9] inline — verified: explicit registration, deny-by-default policy, bounded executor, sanitized traces, seven tool tests/docs. Risk: item 2 (tool execution permissions). Commit: `f642027`; independent verification passed.
+- T3 [S3,S5,S7,S8,S9] inline — verified: native Ollama adapter, bounded turn loop and timer reuse, 12 native-protocol tests/docs. Risk: items 2 and 3 (execution guards; compatibility of PR1 timer). Commit: `d729fdc`; independent verification passed.
+- T4 [S1,S8,S10] inline plus independent verifier — verification complete, publication pending: full offline checks, scoped security verification and old planner/evaluator compatibility passed. One independent PR to publish; no live inference or PR3.
 
 ## Log
 
@@ -86,3 +86,7 @@ L5 — T1 RED: `python -B -m unittest tests.test_agent_state` failed because the
 L6 — T2 RED: `python -B -m unittest tests.test_agent_tools` failed on missing ExecutionContext/tools. GREEN: `python -B -m unittest tests.test_agent_tools tests.test_agent_state` passed 13 tests. Tools require explicit scope/effects, closed schemas and explicit policy grants; mixed write/external effects are never advertised or executed. Pure POSIX deadline utility added for handler bounds; PR1 timer delegation remains T3 work. Traces contain sizes/fingerprints, not secrets. No handler sandbox or live model behavior is claimed.
 
 L7 — T3 RED: `python -B -m unittest tests.test_agent_runtime` failed on missing native adapter/runtime. GREEN: 12 native-protocol tests, 25 agent tests total. Adapter reads bounded non-streaming API envelopes through streamed HTTP chunks, counts reservations, and rejects partial generations. Runtime handles ordered calls and recoverable errors; terminal failure preserves input state. PR1 hard_timeout now delegates to the same pure timer with its original exception/message semantics. Full applicable offline suite (the prior PR1 17-module command plus tests.test_agent_state/tests.test_agent_tools/tests.test_agent_runtime) passed 256 tests. No network/model service was used. Independent verification remains pending.
+
+L8 — The first verifier launch was cancelled without a verdict; user said "CONTINAU". Fresh independent verification of `d729fdc` reproduced 256 passing tests and seven additional probe groups, with no code blockers. Timer classes/messages, all three legacy evaluator modes (30/23/53 attempts), and PR1 deterministic reports matched the base. Planner/main/requirements bytes unchanged; no SQLite/evaluation/domain imports in agent modules. Parent reran the reported 25-agent-test command. Seven independently authored probe groups were ported as readable regression tests and passed; they verify existing behavior, not a new behavior change requiring fabricated RED evidence. No actual model/network call occurred; RDD remains clone-disabled.
+
+L9 — Final offline suite, including the retained independent probes, passed 263 tests. The same 20-module command from L7 was used with tests.test_agent_independent added. No actual inference, connectivity/audio/OS integration or PR3 was run. The only existing runtime-infrastructure edit is PR1's timer delegation; its behavior matched baseline independently. Publication remains the final authorized step.

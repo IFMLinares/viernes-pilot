@@ -84,3 +84,8 @@ python -B -m unittest tests.test_agent_state tests.test_agent_tools tests.test_a
 
 These tests use synthetic native envelopes and forbid real network requests.
 Local model capability/quality remains unverified: no live probe was authorized.
+
+Independent boundary probes are retained as regression tests, not historical
+model evidence: `python -B -m unittest tests.test_agent_independent`. They cover
+native result flow, state hashes on rejection, policy/schema boundaries, caps,
+deadlines and bounded streamed HTTP reads without network access.
